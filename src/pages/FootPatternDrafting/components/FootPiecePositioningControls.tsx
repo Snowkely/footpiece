@@ -1,13 +1,22 @@
 import { Alert, Button, Card, Space, Tag, Typography } from 'antd';
-import type { FootPieceFSelection, FootPiecePositioningGeometry } from '../types';
+import type {
+    AlignedFootPieceGeometry,
+    FootPieceFSelection,
+    FootPiecePositioningGeometry,
+    GeometryValidationError,
+} from '../types';
 
 const { Text } = Typography;
 
 interface FootPiecePositioningControlsProps {
-    footPiece?: FootPiecePositioningGeometry;
+    footPiece?: AlignedFootPieceGeometry;
+    automaticErrors: GeometryValidationError[];
+    manualOverride: boolean;
     selecting: boolean;
     pendingSelection?: FootPieceFSelection;
     confirmedSelection?: FootPieceFSelection;
+    onUseManualOverride: () => void;
+    onUseAutomatic: () => void;
     onStartSelection: () => void;
     onConfirmSelection: () => void;
     onCancelSelection: () => void;
@@ -23,17 +32,30 @@ function sameSelection(first?: FootPieceFSelection, second?: FootPieceFSelection
     );
 }
 
+function isManualPositioningGeometry(
+    footPiece: AlignedFootPieceGeometry | undefined,
+): footPiece is FootPiecePositioningGeometry {
+    return Boolean(footPiece && 'positioning' in footPiece);
+}
+
 const FootPiecePositioningControls: React.FC<FootPiecePositioningControlsProps> = ({
     footPiece,
+    automaticErrors,
+    manualOverride,
     selecting,
     pendingSelection,
     confirmedSelection,
+    onUseManualOverride,
+    onUseAutomatic,
     onStartSelection,
     onConfirmSelection,
     onCancelSelection,
     onClearSelection,
 }) => {
-    const status = footPiece?.positioning.status ?? 'PROVISIONAL';
+    const automaticPositioning = footPiece?.automaticPositioning;
+    const manualPositioning = isManualPositioningGeometry(footPiece)
+        ? footPiece.positioning
+        : undefined;
     const hasUnconfirmedChange = Boolean(
         pendingSelection && !sameSelection(pendingSelection, confirmedSelection),
     );
@@ -43,69 +65,107 @@ const FootPiecePositioningControls: React.FC<FootPiecePositioningControlsProps> 
             className="foot-drafting-panel foot-piece-positioning-controls"
             title="Foot Piece Positioning"
         >
-            <div className="foot-drafting-value-row">
-                <Text>Foot Piece placement</Text>
-                <Tag color={status === 'VALID' ? 'success' : 'warning'}>{status}</Tag>
-            </div>
+            {!manualOverride ? (
+                <>
+                    <div className="foot-drafting-value-row">
+                        <Text>Mid Heel H*</Text>
+                        <Tag color={automaticPositioning ? 'success' : 'error'}>AUTO</Tag>
+                    </div>
+                    <div className="foot-drafting-value-row">
+                        <Text>Second Toe W</Text>
+                        <Tag color={automaticPositioning ? 'success' : 'error'}>AUTO</Tag>
+                    </div>
+                    <div className="foot-drafting-value-row">
+                        <Text>Foot Piece placement</Text>
+                        <Tag color={automaticPositioning ? 'success' : 'warning'}>
+                            {automaticPositioning ? 'VALID' : 'WAITING'}
+                        </Tag>
+                    </div>
 
-            {status !== 'VALID' && !selecting && (
-                <Alert
-                    type="warning"
-                    showIcon
-                    message="Provisional preview"
-                    description="Select F / second toe to complete positioning. The current preview uses the legacy RS-midpoint-to-M' placement."
-                />
-            )}
-
-            {selecting && (
-                <Alert
-                    type="info"
-                    showIcon
-                    message="Select F / second toe"
-                    description="Select the second-toe point F along the highlighted Q-P arc. Other canvas locations are not selectable."
-                />
-            )}
-
-            <Text type="secondary" className="foot-piece-positioning-hint">
-                Suggested second-toe search region: Q-P arc
-            </Text>
-
-            {pendingSelection && (
-                <div className="foot-piece-positioning-selection">
-                    <Text strong>Selected F</Text>
-                    <Text type="secondary">
-                        Q-P segment {pendingSelection.segmentIndex} · t ={' '}
-                        {pendingSelection.segmentT.toFixed(4)}
-                    </Text>
-                    {confirmedSelection && hasUnconfirmedChange && (
-                        <Tag color="processing">Awaiting confirmation</Tag>
+                    {automaticPositioning ? (
+                        <Alert
+                            type="success"
+                            showIcon
+                            message="Automatic foot axis detected"
+                            description="H* comes from the heel extremum and tangent score. W is the first forward H* normal intersection with the Q-P toe arc."
+                        />
+                    ) : automaticErrors.length ? (
+                        <>
+                            <Alert
+                                type="error"
+                                showIcon
+                                message="AUTO DETECTION FAILED"
+                                description={`${automaticErrors[0].code}: ${automaticErrors[0].message}`}
+                            />
+                            <Button onClick={onUseManualOverride}>Use manual override</Button>
+                        </>
+                    ) : (
+                        <Text type="secondary">Enter valid measurements and temporary r.</Text>
                     )}
-                </div>
-            )}
+                </>
+            ) : (
+                <>
+                    <div className="foot-drafting-value-row">
+                        <Text>Second Toe source</Text>
+                        <Tag color="warning">MANUAL DEBUG OVERRIDE</Tag>
+                    </div>
+                    <div className="foot-drafting-value-row">
+                        <Text>Foot Piece placement</Text>
+                        <Tag color={manualPositioning?.status === 'VALID' ? 'success' : 'warning'}>
+                            {manualPositioning?.status ?? 'PROVISIONAL'}
+                        </Tag>
+                    </div>
 
-            <Space wrap className="foot-piece-positioning-actions">
-                {!selecting && !pendingSelection && (
-                    <Button type="primary" disabled={!footPiece} onClick={onStartSelection}>
-                        Select F / second toe
-                    </Button>
-                )}
+                    <Alert
+                        type="warning"
+                        showIcon
+                        message="Legacy fallback only"
+                        description="Manual W uses the legacy RS-midpoint preview and is available only as an explicit debug fallback."
+                    />
 
-                {selecting && <Button onClick={onCancelSelection}>Cancel selection</Button>}
+                    {selecting && (
+                        <Alert
+                            type="info"
+                            showIcon
+                            message="Select W / second toe"
+                            description="Select W along the highlighted Q-P arc. Other canvas locations are not selectable."
+                        />
+                    )}
 
-                {!selecting && pendingSelection && (
-                    <>
-                        {(hasUnconfirmedChange || !confirmedSelection) && (
-                            <Button type="primary" onClick={onConfirmSelection}>
-                                Confirm F
+                    {pendingSelection && (
+                        <div className="foot-piece-positioning-selection">
+                            <Text strong>Selected W</Text>
+                            <Text type="secondary">
+                                Q-P segment {pendingSelection.segmentIndex} · t ={' '}
+                                {pendingSelection.segmentT.toFixed(4)}
+                            </Text>
+                        </div>
+                    )}
+
+                    <Space wrap className="foot-piece-positioning-actions">
+                        <Button onClick={onUseAutomatic}>Retry automatic</Button>
+                        {!selecting && !pendingSelection && (
+                            <Button type="primary" disabled={!footPiece} onClick={onStartSelection}>
+                                Select W / second toe
                             </Button>
                         )}
-                        <Button onClick={onStartSelection}>Reselect F</Button>
-                        <Button danger onClick={onClearSelection}>
-                            Clear F
-                        </Button>
-                    </>
-                )}
-            </Space>
+                        {selecting && <Button onClick={onCancelSelection}>Cancel selection</Button>}
+                        {!selecting && pendingSelection && (
+                            <>
+                                {(hasUnconfirmedChange || !confirmedSelection) && (
+                                    <Button type="primary" onClick={onConfirmSelection}>
+                                        Confirm W
+                                    </Button>
+                                )}
+                                <Button onClick={onStartSelection}>Reselect W</Button>
+                                <Button danger onClick={onClearSelection}>
+                                    Clear W
+                                </Button>
+                            </>
+                        )}
+                    </Space>
+                </>
+            )}
         </Card>
     );
 };

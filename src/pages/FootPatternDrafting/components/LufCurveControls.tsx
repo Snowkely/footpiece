@@ -25,12 +25,12 @@ const LufCurveControls: React.FC<LufCurveControlsProps> = ({ value, geometry, on
             title="LUF'TG' candidate controls"
         >
             <Text type="secondary" className="foot-drafting-panel-intro">
-                Interactive prototype only. Adjust alpha and F&apos; offset to inspect one
-                continuous candidate spline; no automatic search is applied.
+                Legacy prototype only. α = UP / (UP + QT). This disabled solver is not used by Step
+                4.
             </Text>
 
             <Form layout="vertical" requiredMark={false} className="foot-drafting-form">
-                <Form.Item label="UP/QT distribution (alpha)">
+                <Form.Item label="UP/QT Distribution α" extra="α = UP / (UP + QT)">
                     <div className="foot-drafting-slider-input">
                         <Slider
                             aria-label="UP/QT distribution (alpha)"

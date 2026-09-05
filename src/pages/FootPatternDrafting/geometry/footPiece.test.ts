@@ -1,7 +1,12 @@
 import footPieceSampleJson from '../data/footPieceSample.json';
 import type { DraftingParameters, FootPieceLandmarkId, FootPieceSample } from '../types';
 import { buildBackPiece } from './backPiece';
-import { alignFootPieceToFrontPiece, extractHeelArcRS, extractRQPSArc, midpoint, polylineLength } from './footPiece';
+import {
+    alignFootPieceToFrontPiece,
+    extractHeelArcRS,
+    extractRQPSArc,
+    polylineLength,
+} from './footPiece';
 import { buildFrontPiece } from './frontPiece';
 import { distance } from './geometryUtils';
 
@@ -14,7 +19,7 @@ const parameters: DraftingParameters = {
     e: 21.6,
     f: 23.4,
     g: 7,
-    r: 10,
+    r: 16.8,
 };
 
 function createFrontPiece() {
@@ -33,9 +38,25 @@ describe('footPieceSample fixture', () => {
                 }),
             );
         });
-        expect(footPieceSample.source.shrinkedSpline.fitPointCount).toBe(0);
-        expect(footPieceSample.source.shrinkedSpline.controlPointCount).toBe(43);
+        expect(footPieceSample.source.fileName).toBe(
+            'real_foot_piece_calibrated_4measurements_v4.dxf',
+        );
+        expect(footPieceSample.source.sha256).toBe(
+            'de63d0d6623dabd80290bb67b8dc895209990ae1ee653a6b6bdabd25766874cd',
+        );
+        expect(footPieceSample.source.shrinkedSpline.layer).toBe('Layer3');
+        expect(footPieceSample.source.originalSpline.layer).toBe('Layer2');
+        expect(footPieceSample.source.shrinkedSpline.fitPointCount).toBe(221);
+        expect(footPieceSample.source.shrinkedSpline.controlPointCount).toBe(0);
         expect(footPieceSample.shrinkedOutline).toHaveLength(400);
+        expect(distance(footPieceSample.landmarks.P, footPieceSample.landmarks.Q)).toBeCloseTo(
+            9.9,
+            8,
+        );
+        expect(distance(footPieceSample.landmarks.R, footPieceSample.landmarks.S)).toBeCloseTo(
+            6.7,
+            8,
+        );
     });
 
     it('stores raw RS as the distance between the explicit R and S landmarks', () => {
@@ -66,7 +87,7 @@ describe('extractRQPSArc', () => {
 });
 
 describe('alignFootPieceToFrontPiece', () => {
-    it( 'uses r / heel-arc-length as the unit scale and aligns the RS midpoint to M prime',  () => {
+    it("uses r / heel-arc-length as the unit scale and aligns source Ms to M'", () => {
         const frontPiece = createFrontPiece();
         const aligned = alignFootPieceToFrontPiece(footPieceSample, frontPiece, parameters.r!)
             .geometry!;
@@ -79,32 +100,41 @@ describe('alignFootPieceToFrontPiece', () => {
         const expectedRawHeelArcLength = polylineLength(rawHeelArcPoints);
 
         expect(aligned.scaleToCm).toBeCloseTo(parameters.r! / expectedRawHeelArcLength, 12);
-        expect(aligned.rawHeelArcLength).toBeGreaterThan(aligned.rawRsChordLength,);
+        expect(aligned.rawHeelArcLength * aligned.scaleToCm).toBeCloseTo(16.8, 10);
+        expect(aligned.rawHeelArcLength).toBeGreaterThan(aligned.rawRsChordLength);
         expect(aligned.alignedRQPS[0]).toEqual(aligned.alignedLandmarks.R);
         expect(aligned.alignedRQPS.at(-1)).toEqual(aligned.alignedLandmarks.S);
         expect(
-            distance(
-                midpoint(aligned.alignedLandmarks.R, aligned.alignedLandmarks.S),
-                frontPiece.points.MPrime,
-            ),
-        ).toBeLessThanOrEqual(aligned.checks.midpointToMPrime.toleranceCm);
-        expect(aligned.checks.midpointToMPrime.pass).toBe(true);
+            distance(aligned.automaticPositioning!.alignedSourceMs, frontPiece.points.MPrime),
+        ).toBeLessThanOrEqual(aligned.automaticPositioning!.checks.sourceMsToMPrime.toleranceCm);
+        expect(aligned.automaticPositioning!.checks.sourceMsToMPrime.pass).toBe(true);
     });
 
-    it("aligns S-to-R with the same direction as M'-to-G", () => {
+    it("aligns H*-to-W with O-to-M' and preserves heel/toe side orientation", () => {
         const frontPiece = createFrontPiece();
         const aligned = alignFootPieceToFrontPiece(footPieceSample, frontPiece, parameters.r!)
             .geometry!;
-        const sourceX = aligned.alignedLandmarks.R.x - aligned.alignedLandmarks.S.x;
-        const sourceY = aligned.alignedLandmarks.R.y - aligned.alignedLandmarks.S.y;
-        const targetX = frontPiece.points.G.x - frontPiece.points.MPrime.x;
-        const targetY = frontPiece.points.G.y - frontPiece.points.MPrime.y;
-        const crossProduct = sourceX * targetY - sourceY * targetX;
-        const dotProduct = sourceX * targetX + sourceY * targetY;
+        const automatic = aligned.automaticPositioning!;
+        const alignedAxis = {
+            x: automatic.alignedSourceSecondToe.x - automatic.alignedSourceMidHeel.x,
+            y: automatic.alignedSourceSecondToe.y - automatic.alignedSourceMidHeel.y,
+        };
+        const targetAxis = {
+            x: frontPiece.points.MPrime.x - frontPiece.points.O.x,
+            y: frontPiece.points.MPrime.y - frontPiece.points.O.y,
+        };
+        const alignedLength = Math.hypot(alignedAxis.x, alignedAxis.y);
+        const targetLength = Math.hypot(targetAxis.x, targetAxis.y);
+        const directionDot =
+            (alignedAxis.x * targetAxis.x + alignedAxis.y * targetAxis.y) /
+            (alignedLength * targetLength);
 
-        expect(crossProduct).toBeCloseTo(0, 10);
-        expect(dotProduct).toBeGreaterThan(0);
-        expect(aligned.checks.orientation.pass).toBe(true);
+        expect(directionDot).toBeGreaterThan(0.999);
+        expect(automatic.checks.axisToOMPrime.pass).toBe(true);
+        expect(automatic.checks.heelToeSides.heelProjectionCm).toBeLessThan(0);
+        expect(automatic.checks.heelToeSides.toeProjectionCm).toBeGreaterThan(0);
+        expect(automatic.checks.heelToeSides.pass).toBe(true);
+        expect(automatic.checks.uniformTransform.pass).toBe(true);
     });
 
     it('does not mutate the imported fixture points or landmarks', () => {
@@ -117,44 +147,22 @@ describe('alignFootPieceToFrontPiece', () => {
 });
 
 describe('extractHeelArcRS', () => {
-    it(
-        'selects the opposite R-to-S path that does not contain Q and P',
-        () => {
-            const result =
-                extractHeelArcRS(
-                    footPieceSample.shrinkedOutline,
-                    footPieceSample.landmarkIndices,
-                );
+    it('selects the opposite R-to-S path that does not contain Q and P', () => {
+        const result = extractHeelArcRS(
+            footPieceSample.shrinkedOutline,
+            footPieceSample.landmarkIndices,
+        );
 
-            const extraction =
-                result.geometry!;
+        const extraction = result.geometry!;
 
-            expect(result.errors)
-                .toEqual([]);
+        expect(result.errors).toEqual([]);
 
-            expect(
-                extraction.outlineIndices[0],
-            ).toBe(
-                footPieceSample.landmarkIndices.R,
-            );
+        expect(extraction.outlineIndices[0]).toBe(footPieceSample.landmarkIndices.R);
 
-            expect(
-                extraction.outlineIndices.at(-1),
-            ).toBe(
-                footPieceSample.landmarkIndices.S,
-            );
+        expect(extraction.outlineIndices.at(-1)).toBe(footPieceSample.landmarkIndices.S);
 
-            expect(
-                extraction.outlineIndices,
-            ).not.toContain(
-                footPieceSample.landmarkIndices.Q,
-            );
+        expect(extraction.outlineIndices).not.toContain(footPieceSample.landmarkIndices.Q);
 
-            expect(
-                extraction.outlineIndices,
-            ).not.toContain(
-                footPieceSample.landmarkIndices.P,
-            );
-        },
-    );
+        expect(extraction.outlineIndices).not.toContain(footPieceSample.landmarkIndices.P);
+    });
 });

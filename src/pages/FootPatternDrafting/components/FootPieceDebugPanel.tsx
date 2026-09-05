@@ -1,5 +1,5 @@
 import { Card, Tag, Typography } from 'antd';
-import type { FootPieceLandmarkId, FootPiecePositioningGeometry } from '../types';
+import type { AlignedFootPieceGeometry, FootPieceLandmarkId } from '../types';
 
 const { Text } = Typography;
 const LANDMARK_IDS: FootPieceLandmarkId[] = ['P', 'Q', 'R', 'S'];
@@ -7,7 +7,7 @@ const LANDMARK_IDS: FootPieceLandmarkId[] = ['P', 'Q', 'R', 'S'];
 interface FootPieceDebugPanelProps {
     sampleLoaded: boolean;
     targetR?: number;
-    footPiece?: FootPiecePositioningGeometry;
+    footPiece?: AlignedFootPieceGeometry;
 }
 
 function formatNumber(value?: number, digits = 4): string {
@@ -36,10 +36,7 @@ const FootPieceDebugPanel: React.FC<FootPieceDebugPanelProps> = ({
     return (
         <Card size="small" title="Foot Piece" className="foot-drafting-debug-card">
             <DebugRow label="DXF sample loaded" value={sampleLoaded ? 'YES' : 'NO'} />
-            <DebugRow
-                label="Alignment mode"
-                value={footPiece?.positioning.alignmentMode ?? 'legacy-rs-midpoint-to-mprime'}
-            />
+            <DebugRow label="Alignment mode" value={footPiece?.alignmentAssumption ?? '—'} />
             <DebugRow
                 label="RS chord length (raw)"
                 value={`${formatNumber(footPiece?.rawRsChordLength)} DXF units`}
@@ -66,7 +63,10 @@ const FootPieceDebugPanel: React.FC<FootPieceDebugPanelProps> = ({
                 />
             ))}
 
-            <DebugRow label="RS midpoint" value={formatPoint(footPiece?.alignedRsMidpoint)} />
+            <DebugRow
+                label="RS midpoint (diagnostic)"
+                value={formatPoint(footPiece?.alignedRsMidpoint)}
+            />
             <DebugRow label="M'" value={formatPoint(footPiece?.targetMPrime)} />
             <DebugRow label="RQPS sampled points" value={footPiece?.rqpsPointCount ?? '—'} />
             <DebugRow
@@ -74,7 +74,7 @@ const FootPieceDebugPanel: React.FC<FootPieceDebugPanelProps> = ({
                 value={`${formatNumber(footPiece?.rqpsArcLengthCm)} cm`}
             />
 
-            {footPiece?.positioning.alignmentMode === 'legacy-rs-midpoint-to-mprime' && (
+            {footPiece?.alignmentAssumption === 'rs-midpoint-to-mprime' && (
                 <div className="foot-drafting-check-row">
                     <div>
                         <Text>{"Legacy preview: RS midpoint = M'"}</Text>
@@ -89,24 +89,26 @@ const FootPieceDebugPanel: React.FC<FootPieceDebugPanelProps> = ({
                 </div>
             )}
 
-            <div className="foot-drafting-check-row">
-                <div>
-                    <Text>{"S→R aligned with M'→G"}</Text>
-                    <div className="foot-drafting-check-values">
-                        angle error{' '}
-                        {formatNumber(
-                            orientationCheck
-                                ? (orientationCheck.angleErrorRadians * 180) / Math.PI
-                                : undefined,
-                            8,
-                        )}
-                        °
+            {footPiece?.alignmentAssumption === 'rs-midpoint-to-mprime' && (
+                <div className="foot-drafting-check-row">
+                    <div>
+                        <Text>{"S→R aligned with M'→G"}</Text>
+                        <div className="foot-drafting-check-values">
+                            angle error{' '}
+                            {formatNumber(
+                                orientationCheck
+                                    ? (orientationCheck.angleErrorRadians * 180) / Math.PI
+                                    : undefined,
+                                8,
+                            )}
+                            °
+                        </div>
                     </div>
+                    <Tag color={orientationCheck?.pass ? 'success' : 'default'}>
+                        {orientationCheck ? (orientationCheck.pass ? 'PASS' : 'FAIL') : 'WAIT'}
+                    </Tag>
                 </div>
-                <Tag color={orientationCheck?.pass ? 'success' : 'default'}>
-                    {orientationCheck ? (orientationCheck.pass ? 'PASS' : 'FAIL') : 'WAIT'}
-                </Tag>
-            </div>
+            )}
         </Card>
     );
 };

@@ -1,25 +1,38 @@
 import { Alert, Card, Tag, Typography } from 'antd';
+import type { NearbyMultiSupportSearchController } from '../hooks/useNearbyMultiSupportSearch';
 import type {
     AgeGroup,
+    AlignedFootPieceGeometry,
     BackPieceGeometry,
     DraftingParameterInput,
     DraftingParameterInputKey,
     DraftingParameters,
     FootMeasurementInputMode,
-    FootPiecePositioningGeometry,
     FootPieceSample,
     FrontPieceGeometry,
     GeometryCheck,
     GeometryValidationError,
-    LufCurveGeometry,
-    LufCurveParameters,
     NumericFootMeasurementKey,
     RawFootMeasurementInput,
+    TargetAnkleIntersectionGeometry,
+    TargetMultiSupportOuterCurveCandidate,
+    TargetReferenceArcGeometry,
+    TargetUtGeometry,
+    TargetWPrimeGeometry,
+    ToeRadialOuterSupportGeometry,
+    ToeRadialReferenceGeometry,
 } from '../types';
 import DerivedValuesPanel from './DerivedValuesPanel';
 import FootPieceDebugPanel from './FootPieceDebugPanel';
 import FootPiecePositioningDebugPanel from './FootPiecePositioningDebugPanel';
-import LufCurveDebugPanel from './LufCurveDebugPanel';
+import NearbyMultiSupportSearchDebugPanel from './NearbyMultiSupportSearchDebugPanel';
+import TargetAnkleIntersectionsDebugPanel from './TargetAnkleIntersectionsDebugPanel';
+import TargetMultiSupportOuterCurveDebugPanel from './TargetMultiSupportOuterCurveDebugPanel';
+import TargetReferenceArcDebugPanel from './TargetReferenceArcDebugPanel';
+import TargetUtDebugPanel from './TargetUtDebugPanel';
+import TargetWPrimeDebugPanel from './TargetWPrimeDebugPanel';
+import ToeRadialOuterSupportsDebugPanel from './ToeRadialOuterSupportsDebugPanel';
+import ToeRadialReferencesDebugPanel from './ToeRadialReferencesDebugPanel';
 
 const { Text } = Typography;
 
@@ -32,9 +45,24 @@ interface GeometryDebugPanelProps {
     backPiece?: BackPieceGeometry;
     frontPiece?: FrontPieceGeometry;
     footPieceSample?: FootPieceSample;
-    footPiece?: FootPiecePositioningGeometry;
-    lufCurveParameters: LufCurveParameters;
-    lufCurve?: LufCurveGeometry;
+    footPiece?: AlignedFootPieceGeometry;
+    targetAnkleIntersections?: TargetAnkleIntersectionGeometry;
+    targetReferenceArc?: TargetReferenceArcGeometry;
+    targetReferenceArcErrors: GeometryValidationError[];
+    targetUt?: TargetUtGeometry;
+    targetUtErrors: GeometryValidationError[];
+    targetUtDistribution: number;
+    targetWPrime?: TargetWPrimeGeometry;
+    targetWPrimeErrors: GeometryValidationError[];
+    targetWPrimeOutwardOffsetCm: number;
+    targetMultiSupportOuterCurve?: TargetMultiSupportOuterCurveCandidate;
+    targetMultiSupportOuterCurveErrors: GeometryValidationError[];
+    toeRadialAngleDeg: number;
+    toeRadialReferences?: ToeRadialReferenceGeometry;
+    toeRadialReferenceErrors: GeometryValidationError[];
+    toeRadialOuterSupports?: ToeRadialOuterSupportGeometry;
+    toeRadialOuterSupportErrors: GeometryValidationError[];
+    nearbySearch: NearbyMultiSupportSearchController;
     derivedGeometry: {
         x?: number;
         z?: number;
@@ -92,8 +120,23 @@ const GeometryDebugPanel: React.FC<GeometryDebugPanelProps> = ({
     frontPiece,
     footPieceSample,
     footPiece,
-    lufCurveParameters,
-    lufCurve,
+    targetAnkleIntersections,
+    targetReferenceArc,
+    targetReferenceArcErrors,
+    targetUt,
+    targetUtErrors,
+    targetUtDistribution,
+    targetWPrime,
+    targetWPrimeErrors,
+    targetWPrimeOutwardOffsetCm,
+    targetMultiSupportOuterCurve,
+    targetMultiSupportOuterCurveErrors,
+    toeRadialAngleDeg,
+    toeRadialReferences,
+    toeRadialReferenceErrors,
+    toeRadialOuterSupports,
+    toeRadialOuterSupportErrors,
+    nearbySearch,
     derivedGeometry,
     errors,
 }) => {
@@ -149,12 +192,45 @@ const GeometryDebugPanel: React.FC<GeometryDebugPanelProps> = ({
 
             <FootPiecePositioningDebugPanel footPiece={footPiece} />
 
-            <LufCurveDebugPanel
-                parameters={lufCurveParameters}
-                a={parameters?.a}
-                footPiece={footPiece}
-                curve={lufCurve}
+            <TargetAnkleIntersectionsDebugPanel geometry={targetAnkleIntersections} />
+
+            <TargetReferenceArcDebugPanel
+                geometry={targetReferenceArc}
+                errors={targetReferenceArcErrors}
             />
+
+            <ToeRadialReferencesDebugPanel
+                thetaDeg={toeRadialAngleDeg}
+                geometry={toeRadialReferences}
+                errors={toeRadialReferenceErrors}
+            />
+
+            <TargetUtDebugPanel
+                a={parameters?.a}
+                distribution={targetUtDistribution}
+                geometry={targetUt}
+                errors={targetUtErrors}
+            />
+
+            <TargetWPrimeDebugPanel
+                geometry={targetWPrime}
+                errors={targetWPrimeErrors}
+                outwardOffsetCm={targetWPrimeOutwardOffsetCm}
+            />
+
+            <ToeRadialOuterSupportsDebugPanel
+                thetaDeg={toeRadialAngleDeg}
+                outwardOffsetCm={targetWPrimeOutwardOffsetCm}
+                geometry={toeRadialOuterSupports}
+                errors={toeRadialOuterSupportErrors}
+            />
+
+            <TargetMultiSupportOuterCurveDebugPanel
+                candidate={targetMultiSupportOuterCurve}
+                errors={targetMultiSupportOuterCurveErrors}
+            />
+
+            <NearbyMultiSupportSearchDebugPanel controller={nearbySearch} />
 
             {errors.map((error) => (
                 <Alert

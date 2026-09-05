@@ -67,7 +67,10 @@ const LufCurveDebugPanel: React.FC<LufCurveDebugPanelProps> = ({
             <DebugRow label="PQ length" value={formatCentimeters(curve?.pqLengthCm)} />
             <DebugRow label="a" value={formatCentimeters(a)} />
             <DebugRow label="extra = a - PQ" value={formatCentimeters(curve?.extraLengthCm)} />
-            <DebugRow label="alpha" value={formatNumber(parameters.upQtDistribution, 2)} />
+            <DebugRow
+                label="α = UP / (UP + QT)"
+                value={formatNumber(parameters.upQtDistribution, 2)}
+            />
             <DebugRow label="UP" value={formatCentimeters(curve?.upLengthCm)} />
             <DebugRow label="QT" value={formatCentimeters(curve?.qtLengthCm)} />
             <DebugRow label="UT actual" value={formatCentimeters(utCheck?.actual)} />

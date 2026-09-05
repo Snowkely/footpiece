@@ -20,6 +20,8 @@ import ezdxf
 
 LANDMARK_IDS = ("P", "Q", "R", "S")
 DEFAULT_SEGMENTS = 400
+SHRINKED_SPLINE_LAYER = "Layer3"
+COMPATIBILITY_SPLINE_LAYER = "Layer2"
 
 
 def point_dict(point: Any, point_id: str) -> dict[str, float | str]:
@@ -104,16 +106,39 @@ def extract(source_path: Path, segments: int) -> dict[str, Any]:
             }
         )
 
-    smallest_candidate = min(candidates, key=lambda candidate: candidate["area"])
-    closest_candidate = min(candidates, key=lambda candidate: candidate["snap_score"])
-    if smallest_candidate is not closest_candidate:
-        raise ValueError(
-            "The smaller SPLINE is not also the SPLINE closest to all P/Q/R/S landmarks; "
-            "shrinked outline identity is ambiguous"
-        )
+    shrinked_layer_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate["entity"].dxf.layer == SHRINKED_SPLINE_LAYER
+    ]
+    compatibility_layer_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate["entity"].dxf.layer == COMPATIBILITY_SPLINE_LAYER
+    ]
 
-    shrinked = smallest_candidate
-    original = next(candidate for candidate in candidates if candidate is not shrinked)
+    if len(shrinked_layer_candidates) == 1 and len(compatibility_layer_candidates) == 1:
+        # The checked real-photo fixture explicitly declares semantic layer identity.
+        # Layer2 is only a compatibility outline; Layer3 is the drafting source.
+        shrinked = shrinked_layer_candidates[0]
+        original = compatibility_layer_candidates[0]
+    elif not shrinked_layer_candidates and not compatibility_layer_candidates:
+        # Legacy fixtures do not necessarily carry the canonical Layer2/Layer3 names.
+        # Retain the checked area + landmark proximity heuristic only for that case.
+        smallest_candidate = min(candidates, key=lambda candidate: candidate["area"])
+        closest_candidate = min(candidates, key=lambda candidate: candidate["snap_score"])
+        if smallest_candidate is not closest_candidate:
+            raise ValueError(
+                "The smaller SPLINE is not also the SPLINE closest to all P/Q/R/S landmarks; "
+                "shrinked outline identity is ambiguous"
+            )
+        shrinked = smallest_candidate
+        original = next(candidate for candidate in candidates if candidate is not shrinked)
+    else:
+        raise ValueError(
+            f"Expected exactly one {SHRINKED_SPLINE_LAYER} shrinked SPLINE and one "
+            f"{COMPATIBILITY_SPLINE_LAYER} compatibility SPLINE"
+        )
 
     for landmark_id, (_, snap_distance) in shrinked["snaps"].items():
         if snap_distance > shrinked["snap_tolerance"]:

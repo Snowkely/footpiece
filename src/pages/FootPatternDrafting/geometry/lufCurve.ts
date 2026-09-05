@@ -6,6 +6,7 @@ import type {
     GeometryBuildResult,
     LufCurveGeometry,
     LufCurveParameters,
+    TargetUtGeometry,
 } from '../types';
 import { pointInPolygon, polylineIntersections, polylineLength } from './curveUtils';
 import {
@@ -14,19 +15,16 @@ import {
     GEOMETRY_EPSILON_CM,
     VALIDATION_TOLERANCE_CM,
 } from './geometryUtils';
+import { deriveTargetUtConstruction } from './targetUt';
 
 export const LUF_CURVE_SAMPLE_SEGMENTS = 200;
 export const LUF_CURVE_REFERENCE_ALLOWANCE_MIN_CM = 1;
 export const LUF_CURVE_REFERENCE_ALLOWANCE_MAX_CM = 2;
 
-export interface UtConstruction {
-    U: DraftPoint;
-    T: DraftPoint;
-    pqLengthCm: number;
-    extraLengthCm: number;
-    upLengthCm: number;
-    qtLengthCm: number;
-}
+export type UtConstruction = Pick<
+    TargetUtGeometry,
+    'U' | 'T' | 'pqLengthCm' | 'extraLengthCm' | 'upLengthCm' | 'qtLengthCm'
+>;
 
 function isFinitePoint(point: DraftPoint): boolean {
     return Number.isFinite(point.x) && Number.isFinite(point.y);
@@ -199,74 +197,26 @@ export function buildUtPoints(
     a: number,
     upQtDistribution: number,
 ): GeometryBuildResult<UtConstruction> {
-    if (
-        !isFinitePoint(P) ||
-        !isFinitePoint(Q) ||
-        !Number.isFinite(a) ||
-        a < 0 ||
-        !Number.isFinite(upQtDistribution) ||
-        upQtDistribution < 0 ||
-        upQtDistribution > 1
-    ) {
+    const result = deriveTargetUtConstruction(P, Q, a, upQtDistribution);
+
+    if (!result.geometry) {
+        const legacyCodeByTargetCode: Record<string, string> = {
+            TARGET_UT_A_SHORTER_THAN_PQ: 'LUT_CURVE_A_SHORTER_THAN_PQ',
+            TARGET_UT_PQ_DIRECTION_INVALID: 'LUF_CURVE_PQ_DIRECTION_INVALID',
+        };
+
         return {
-            errors: [
-                {
-                    code: 'LUF_CURVE_UT_INPUT_INVALID',
-                    message: 'U/T construction requires finite P, Q, a and alpha in [0, 1].',
-                },
-            ],
+            errors: result.errors.map((error) => ({
+                ...error,
+                code: legacyCodeByTargetCode[error.code] ?? 'LUF_CURVE_UT_INPUT_INVALID',
+            })),
         };
     }
 
-    const pqLengthCm = distance(P, Q);
-    if (pqLengthCm <= GEOMETRY_EPSILON_CM) {
-        return {
-            errors: [
-                {
-                    code: 'LUF_CURVE_PQ_DIRECTION_INVALID',
-                    message: 'Aligned landmarks P and Q must define a non-zero direction.',
-                },
-            ],
-        };
-    }
-
-    const rawExtraLengthCm = a - pqLengthCm;
-    if (rawExtraLengthCm < -VALIDATION_TOLERANCE_CM) {
-        return {
-            errors: [
-                {
-                    code: 'LUT_CURVE_A_SHORTER_THAN_PQ',
-                    message: `UT cannot equal a: a (${a.toFixed(
-                        3,
-                    )} cm) is shorter than PQ (${pqLengthCm.toFixed(3)} cm).`,
-                },
-            ],
-        };
-    }
-
-    const extraLengthCm = Math.max(0, rawExtraLengthCm);
-    const upLengthCm = upQtDistribution * extraLengthCm;
-    const qtLengthCm = (1 - upQtDistribution) * extraLengthCm;
-    const directionX = (Q.x - P.x) / pqLengthCm;
-    const directionY = (Q.y - P.y) / pqLengthCm;
+    const { U, T, pqLengthCm, extraLengthCm, upLengthCm, qtLengthCm } = result.geometry;
 
     return {
-        geometry: {
-            U: {
-                id: 'U',
-                x: P.x - directionX * upLengthCm,
-                y: P.y - directionY * upLengthCm,
-            },
-            T: {
-                id: 'T',
-                x: Q.x + directionX * qtLengthCm,
-                y: Q.y + directionY * qtLengthCm,
-            },
-            pqLengthCm,
-            extraLengthCm,
-            upLengthCm,
-            qtLengthCm,
-        },
+        geometry: { U, T, pqLengthCm, extraLengthCm, upLengthCm, qtLengthCm },
         errors: [],
     };
 }

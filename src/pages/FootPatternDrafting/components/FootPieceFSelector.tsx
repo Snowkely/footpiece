@@ -65,10 +65,10 @@ const FootPieceFSelector: React.FC<FootPieceFSelectorProps> = ({
     onSelect,
 }) => {
     const pendingPoint = pendingSelection
-        ? pointAtFootPieceFSelection(footPiece.alignedQPArc, pendingSelection, 'F candidate')
+        ? pointAtFootPieceFSelection(footPiece.alignedQPArc, pendingSelection, 'W candidate')
         : undefined;
     const hoverPoint = hoverSelection
-        ? pointAtFootPieceFSelection(footPiece.alignedQPArc, hoverSelection, 'F hover')
+        ? pointAtFootPieceFSelection(footPiece.alignedQPArc, hoverSelection, 'W hover')
         : undefined;
     const confirmedPoint = footPiece.positioning.alignedF;
     const pendingDiffersFromConfirmed = Boolean(
@@ -114,7 +114,7 @@ const FootPieceFSelector: React.FC<FootPieceFSelectorProps> = ({
     ];
 
     const getSelectionFromPointer = (
-        event: ThreeEvent<PointerEvent>,
+        event: ThreeEvent<PointerEvent | MouseEvent>,
     ): FootPieceFSelection | undefined => {
         const localPoint = event.object.worldToLocal(event.point.clone());
         return nearestFootPieceFSelection(
@@ -173,17 +173,17 @@ const FootPieceFSelector: React.FC<FootPieceFSelectorProps> = ({
                 <FMarker
                     point={hoverPoint}
                     color="#f59e0b"
-                    label="F hover"
+                    label="W hover"
                     radius={F_HOVER_RADIUS_CM}
                 />
             )}
 
             {showFMarkers && pendingPoint && pendingDiffersFromConfirmed && (
-                <FMarker point={pendingPoint} color="#2563eb" label="F selected" />
+                <FMarker point={pendingPoint} color="#2563eb" label="W selected" />
             )}
 
             {showFMarkers && confirmedPoint && (
-                <FMarker point={confirmedPoint} color="#16a34a" label="F" />
+                <FMarker point={confirmedPoint} color="#16a34a" label="W" />
             )}
         </group>
     );

@@ -4,9 +4,10 @@ import { CameraControls, Grid, Html, Line } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { Button, Switch, Tag } from 'antd';
 import CameraControlsImpl from 'camera-controls';
-import { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type {
+    AlignedFootPieceGeometry,
     BackPieceGeometry,
     DraftLine,
     DraftPoint,
@@ -14,8 +15,16 @@ import type {
     FootPiecePositioningGeometry,
     FrontPieceGeometry,
     LufCurveGeometry,
+    TargetAnkleIntersectionGeometry,
+    TargetMultiSupportOuterCurveCandidate,
+    TargetReferenceArcGeometry,
+    TargetUtGeometry,
+    TargetWPrimeGeometry,
+    ToeRadialOuterSupportGeometry,
+    ToeRadialReferenceGeometry,
 } from '../types';
 import AlignedFootPiece from './AlignedFootPiece';
+import AutomaticFootAxisLayer from './AutomaticFootAxisLayer';
 import {
     FOOT_PATTERN_CAMERA_MOUSE_BUTTONS,
     FOOT_PATTERN_CAMERA_TOUCHES,
@@ -23,12 +32,27 @@ import {
 import CandidateLufCurve from './CandidateLufCurve';
 import ConstructionPoint from './ConstructionPoint';
 import FootPieceFSelector from './FootPieceFSelector';
+import TargetAnkleIntersectionsLayer from './TargetAnkleIntersectionsLayer';
+import TargetMultiSupportOuterCurveLayer from './TargetMultiSupportOuterCurveLayer';
+import TargetReferenceArcLayer from './TargetReferenceArcLayer';
+import TargetUtLayer from './TargetUtLayer';
+import TargetWPrimeLayer from './TargetWPrimeLayer';
+import ToeRadialOuterSupportsLayer from './ToeRadialOuterSupportsLayer';
+import ToeRadialReferencesLayer from './ToeRadialReferencesLayer';
 
 interface FootPatternSceneProps {
     backPiece?: BackPieceGeometry;
     frontPiece?: FrontPieceGeometry;
-    footPiece?: FootPiecePositioningGeometry;
+    footPiece?: AlignedFootPieceGeometry;
     lufCurve?: LufCurveGeometry;
+    targetAnkleIntersections?: TargetAnkleIntersectionGeometry;
+    targetReferenceArc?: TargetReferenceArcGeometry;
+    targetUt?: TargetUtGeometry;
+    targetWPrime?: TargetWPrimeGeometry;
+    targetMultiSupportOuterCurve?: TargetMultiSupportOuterCurveCandidate;
+    searchPreviewMultiSupportOuterCurve?: TargetMultiSupportOuterCurveCandidate;
+    toeRadialReferences?: ToeRadialReferenceGeometry;
+    toeRadialOuterSupports?: ToeRadialOuterSupportGeometry;
     fSelectionMode: boolean;
     pendingFSelection?: FootPieceFSelection;
     hoverFSelection?: FootPieceFSelection;
@@ -61,8 +85,13 @@ function getYBounds(points: DraftPoint[]): { min: number; max: number } {
 function createDisplayBounds(
     backPiece: BackPieceGeometry | undefined,
     frontPiece: FrontPieceGeometry | undefined,
-    footPiece: FootPiecePositioningGeometry | undefined,
+    footPiece: AlignedFootPieceGeometry | undefined,
     lufCurve: LufCurveGeometry | undefined,
+    targetUt: TargetUtGeometry | undefined,
+    targetWPrime: TargetWPrimeGeometry | undefined,
+    targetMultiSupportOuterCurve: TargetMultiSupportOuterCurveCandidate | undefined,
+    searchPreviewMultiSupportOuterCurve: TargetMultiSupportOuterCurveCandidate | undefined,
+    toeRadialOuterSupports: ToeRadialOuterSupportGeometry | undefined,
     backOffset: DisplayOffset,
     frontOffset: DisplayOffset,
 ): THREE.Box3 | undefined {
@@ -88,8 +117,37 @@ function createDisplayBounds(
     if (lufCurve) {
         expandByPoints(lufCurve.sampledCurve, frontOffset);
     }
-
+    if (targetUt) {
+        expandByPoints([targetUt.U, targetUt.T], frontOffset);
+    }
+    if (targetWPrime) {
+        expandByPoints([targetWPrime.WPrime], frontOffset);
+    }
+    if (targetMultiSupportOuterCurve) {
+        expandByPoints(targetMultiSupportOuterCurve.polylinePoints, frontOffset);
+    }
+    if (searchPreviewMultiSupportOuterCurve) {
+        expandByPoints(searchPreviewMultiSupportOuterCurve.polylinePoints, frontOffset);
+    }
+    if (toeRadialOuterSupports) {
+        expandByPoints(
+            [
+                toeRadialOuterSupports.W1Prime.outerPoint,
+                toeRadialOuterSupports.W2Prime.outerPoint,
+                toeRadialOuterSupports.WPrime.outerPoint,
+                toeRadialOuterSupports.W3Prime.outerPoint,
+                toeRadialOuterSupports.W4Prime.outerPoint,
+            ],
+            frontOffset,
+        );
+    }
     return bounds.isEmpty() ? undefined : bounds;
+}
+
+function isManualPositioningGeometry(
+    footPiece: AlignedFootPieceGeometry,
+): footPiece is FootPiecePositioningGeometry {
+    return 'positioning' in footPiece;
 }
 
 const DraftPiece: React.FC<DraftPieceProps> = ({
@@ -142,6 +200,14 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
     frontPiece,
     footPiece,
     lufCurve,
+    targetAnkleIntersections,
+    targetReferenceArc,
+    targetUt,
+    targetWPrime,
+    targetMultiSupportOuterCurve,
+    searchPreviewMultiSupportOuterCurve,
+    toeRadialReferences,
+    toeRadialOuterSupports,
     fSelectionMode,
     pendingFSelection,
     hoverFSelection,
@@ -154,6 +220,28 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
     const [showReferencePoints, setShowReferencePoints] = useState(true);
     const [showCandidateCurve, setShowCandidateCurve] = useState(true);
     const [showConstructionLines, setShowConstructionLines] = useState(true);
+    const [showMidHeel, setShowMidHeel] = useState(true);
+    const [showMidHeelTangent, setShowMidHeelTangent] = useState(true);
+    const [showToeNormal, setShowToeNormal] = useState(true);
+    const [showToeArc, setShowToeArc] = useState(true);
+    const [showSecondToe, setShowSecondToe] = useState(true);
+    const [showLongitudinalAxis, setShowLongitudinalAxis] = useState(true);
+    const [showSourceRS, setShowSourceRS] = useState(true);
+    const [showSourceMs, setShowSourceMs] = useState(true);
+    const [showTargetAxis, setShowTargetAxis] = useState(true);
+    const [showTargetMPrimeG, setShowTargetMPrimeG] = useState(true);
+    const [showTargetAnkleIntersections, setShowTargetAnkleIntersections] = useState(true);
+    const [showTargetReferenceArc, setShowTargetReferenceArc] = useState(true);
+    const [showTargetUt, setShowTargetUt] = useState(true);
+    const [showTargetWPrime, setShowTargetWPrime] = useState(true);
+    const [showTargetMultiSupportOuterCurve, setShowTargetMultiSupportOuterCurve] = useState(true);
+    const [showSearchPreviewMultiSupportOuterCurve, setShowSearchPreviewMultiSupportOuterCurve] =
+        useState(true);
+    const [showToeRadialReferences, setShowToeRadialReferences] = useState(true);
+    const [showToeOuterSupports, setShowToeOuterSupports] = useState(true);
+    const [layerControlsExpanded, setLayerControlsExpanded] = useState(true);
+    const manualFootPiece =
+        footPiece && isManualPositioningGeometry(footPiece) ? footPiece : undefined;
     const displayOffsets = useMemo(() => {
         if (backPiece && frontPiece) {
             const backBounds = getYBounds(Object.values(backPiece.points));
@@ -186,10 +274,26 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
                 frontPiece,
                 footPiece,
                 lufCurve,
+                targetUt,
+                targetWPrime,
+                targetMultiSupportOuterCurve,
+                searchPreviewMultiSupportOuterCurve,
+                toeRadialOuterSupports,
                 displayOffsets.back,
                 displayOffsets.front,
             ),
-        [backPiece, displayOffsets, footPiece, frontPiece, lufCurve],
+        [
+            backPiece,
+            displayOffsets,
+            footPiece,
+            frontPiece,
+            lufCurve,
+            targetMultiSupportOuterCurve,
+            searchPreviewMultiSupportOuterCurve,
+            targetUt,
+            targetWPrime,
+            toeRadialOuterSupports,
+        ],
     );
 
     const resetView = () => {
@@ -222,6 +326,22 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
                 </div>
                 <div className="foot-drafting-viewer-actions">
                     <Tag>Units: cm</Tag>
+                    {targetMultiSupportOuterCurve && (
+                        <Tag color={targetMultiSupportOuterCurve.valid ? 'success' : 'warning'}>
+                            MULTI-SUPPORT {targetMultiSupportOuterCurve.valid ? 'VALID' : 'INVALID'}
+                        </Tag>
+                    )}
+                    {searchPreviewMultiSupportOuterCurve && (
+                        <Tag color="cyan">SEARCH PREVIEW VALID</Tag>
+                    )}
+                    <Button
+                        size="small"
+                        aria-controls="foot-pattern-layer-controls"
+                        aria-expanded={layerControlsExpanded}
+                        onClick={() => setLayerControlsExpanded((expanded) => !expanded)}
+                    >
+                        {layerControlsExpanded ? 'Hide layer controls' : 'Show layer controls'}
+                    </Button>
                     <Button size="small" icon={<ReloadOutlined />} onClick={resetView}>
                         Reset view
                     </Button>
@@ -234,48 +354,216 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
                         Fit view
                     </Button>
                 </div>
-                <div className="foot-drafting-viewer-switches">
-                    <label>
-                        <Switch
-                            size="small"
-                            checked={showShrinkedOutline}
-                            onChange={setShowShrinkedOutline}
-                        />
-                        Show shrinked outline
-                    </label>
-                    <label>
-                        <Switch
-                            size="small"
-                            checked={showReferenceCurve}
-                            onChange={setShowReferenceCurve}
-                        />
-                        Show RQPS / RQFPS
-                    </label>
-                    <label>
-                        <Switch
-                            size="small"
-                            checked={showReferencePoints}
-                            onChange={setShowReferencePoints}
-                        />
-                        Show F/F&apos;
-                    </label>
-                    <label>
-                        <Switch
-                            size="small"
-                            checked={showCandidateCurve}
-                            onChange={setShowCandidateCurve}
-                        />
-                        Show candidate LUF&apos;TG&apos;
-                    </label>
-                    <label>
-                        <Switch
-                            size="small"
-                            checked={showConstructionLines}
-                            onChange={setShowConstructionLines}
-                        />
-                        Show construction lines
-                    </label>
-                </div>
+                {layerControlsExpanded && (
+                    <div id="foot-pattern-layer-controls" className="foot-drafting-viewer-switches">
+                        <label>
+                            <Switch
+                                size="small"
+                                checked={showShrinkedOutline}
+                                onChange={setShowShrinkedOutline}
+                            />
+                            Show shrinked outline
+                        </label>
+                        <label>
+                            <Switch
+                                size="small"
+                                checked={showReferenceCurve}
+                                onChange={setShowReferenceCurve}
+                            />
+                            Show RQPS
+                        </label>
+                        <label>
+                            <Switch
+                                size="small"
+                                checked={showReferencePoints}
+                                onChange={setShowReferencePoints}
+                            />
+                            Show reference points
+                        </label>
+                        {lufCurve && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showCandidateCurve}
+                                    onChange={setShowCandidateCurve}
+                                />
+                                Show legacy candidate LUF&apos;TG&apos;
+                            </label>
+                        )}
+                        <label>
+                            <Switch
+                                size="small"
+                                checked={showConstructionLines}
+                                onChange={setShowConstructionLines}
+                            />
+                            Show construction lines
+                        </label>
+                        {footPiece?.automaticPositioning && (
+                            <>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showMidHeel}
+                                        onChange={setShowMidHeel}
+                                    />
+                                    Show H* Candidate
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showMidHeelTangent}
+                                        onChange={setShowMidHeelTangent}
+                                    />
+                                    Show H* Tangent
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showToeNormal}
+                                        onChange={setShowToeNormal}
+                                    />
+                                    Show H* Toe Normal
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showToeArc}
+                                        onChange={setShowToeArc}
+                                    />
+                                    Show Q-P Toe Arc
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showSecondToe}
+                                        onChange={setShowSecondToe}
+                                    />
+                                    Show W / Second Toe
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showLongitudinalAxis}
+                                        onChange={setShowLongitudinalAxis}
+                                    />
+                                    Show H*-W Axis
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showSourceRS}
+                                        onChange={setShowSourceRS}
+                                    />
+                                    Show Source R-S
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showSourceMs}
+                                        onChange={setShowSourceMs}
+                                    />
+                                    Show Source Ms
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showTargetAxis}
+                                        onChange={setShowTargetAxis}
+                                    />
+                                    Show Target O-M&apos; Axis
+                                </label>
+                                <label>
+                                    <Switch
+                                        size="small"
+                                        checked={showTargetMPrimeG}
+                                        onChange={setShowTargetMPrimeG}
+                                    />
+                                    Show Target M&apos;G Line
+                                </label>
+                            </>
+                        )}
+                        {targetAnkleIntersections && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showTargetAnkleIntersections}
+                                    onChange={setShowTargetAnkleIntersections}
+                                />
+                                Show Target R*/S*
+                            </label>
+                        )}
+                        {targetReferenceArc && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showTargetReferenceArc}
+                                    onChange={setShowTargetReferenceArc}
+                                />
+                                Show Target Reference Arc
+                            </label>
+                        )}
+                        {toeRadialReferences && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showToeRadialReferences}
+                                    onChange={setShowToeRadialReferences}
+                                />
+                                Show Toe Radial References
+                            </label>
+                        )}
+                        {toeRadialOuterSupports && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showToeOuterSupports}
+                                    onChange={setShowToeOuterSupports}
+                                />
+                                Show Toe Outer Supports
+                            </label>
+                        )}
+                        {targetUt && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showTargetUt}
+                                    onChange={setShowTargetUt}
+                                />
+                                Show U/T Construction
+                            </label>
+                        )}
+                        {targetWPrime && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showTargetWPrime}
+                                    onChange={setShowTargetWPrime}
+                                />
+                                Show W&apos; Construction
+                            </label>
+                        )}
+                        {targetMultiSupportOuterCurve && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showTargetMultiSupportOuterCurve}
+                                    onChange={setShowTargetMultiSupportOuterCurve}
+                                />
+                                Show Multi-Support Outer Curve
+                            </label>
+                        )}
+                        {searchPreviewMultiSupportOuterCurve && (
+                            <label>
+                                <Switch
+                                    size="small"
+                                    checked={showSearchPreviewMultiSupportOuterCurve}
+                                    onChange={setShowSearchPreviewMultiSupportOuterCurve}
+                                />
+                                Show Search Preview Candidate
+                            </label>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div
@@ -334,9 +622,59 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
                                     referenceCurveOpacity={fSelectionMode ? 0.22 : 1}
                                 />
                             )}
-                            {footPiece && (
+                            {footPiece?.automaticPositioning && (
+                                <AutomaticFootAxisLayer
+                                    positioning={footPiece.automaticPositioning}
+                                    frontPiece={frontPiece}
+                                    visibility={{
+                                        midHeel: showMidHeel,
+                                        tangent: showMidHeelTangent,
+                                        toeNormal: showToeNormal,
+                                        toeArc: showToeArc,
+                                        secondToe: showSecondToe,
+                                        longitudinalAxis: showLongitudinalAxis,
+                                        sourceRS: showSourceRS,
+                                        sourceMs: showSourceMs,
+                                        targetAxis: showTargetAxis,
+                                        targetMPrimeG: showTargetMPrimeG,
+                                    }}
+                                />
+                            )}
+                            {targetAnkleIntersections && showTargetAnkleIntersections && (
+                                <TargetAnkleIntersectionsLayer
+                                    geometry={targetAnkleIntersections}
+                                />
+                            )}
+                            {targetReferenceArc && showTargetReferenceArc && (
+                                <TargetReferenceArcLayer geometry={targetReferenceArc} />
+                            )}
+                            {toeRadialReferences && showToeRadialReferences && (
+                                <ToeRadialReferencesLayer geometry={toeRadialReferences} />
+                            )}
+                            {toeRadialOuterSupports && showToeOuterSupports && (
+                                <ToeRadialOuterSupportsLayer geometry={toeRadialOuterSupports} />
+                            )}
+                            {targetUt && showTargetUt && <TargetUtLayer geometry={targetUt} />}
+                            {targetWPrime && showTargetWPrime && (
+                                <TargetWPrimeLayer geometry={targetWPrime} />
+                            )}
+                            {targetMultiSupportOuterCurve && showTargetMultiSupportOuterCurve && (
+                                <TargetMultiSupportOuterCurveLayer
+                                    candidate={targetMultiSupportOuterCurve}
+                                />
+                            )}
+                            {searchPreviewMultiSupportOuterCurve &&
+                                showSearchPreviewMultiSupportOuterCurve && (
+                                    <TargetMultiSupportOuterCurveLayer
+                                        candidate={searchPreviewMultiSupportOuterCurve}
+                                        color="#06b6d4"
+                                        lineWidth={3}
+                                        zOffset={1.05}
+                                    />
+                                )}
+                            {manualFootPiece && (
                                 <FootPieceFSelector
-                                    footPiece={footPiece}
+                                    footPiece={manualFootPiece}
                                     frontPiece={frontPiece}
                                     selectionMode={fSelectionMode}
                                     pendingSelection={pendingFSelection}

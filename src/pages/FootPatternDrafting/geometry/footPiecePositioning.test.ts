@@ -2,7 +2,7 @@ import footPieceSampleJson from '../data/footPieceSample.json';
 import type { DraftingParameters, FootPieceFSelection, FootPieceSample } from '../types';
 import { buildBackPiece } from './backPiece';
 import { polylineLength } from './curveUtils';
-import { alignFootPieceToFrontPiece } from './footPiece';
+import { alignFootPieceLegacyToFrontPiece } from './footPiece';
 import {
     extractReferenceArcQP,
     extractSourceReferenceArcQP,
@@ -29,7 +29,8 @@ const parameters: DraftingParameters = {
 function createGeometry() {
     const backPiece = buildBackPiece(parameters).geometry!;
     const frontPiece = buildFrontPiece(parameters, 'adult', backPiece.x, backPiece.z).geometry!;
-    const provisional = alignFootPieceToFrontPiece(sample, frontPiece, parameters.r!).geometry!;
+    const provisional = alignFootPieceLegacyToFrontPiece(sample, frontPiece, parameters.r!)
+        .geometry!;
     return { frontPiece, provisional };
 }
 

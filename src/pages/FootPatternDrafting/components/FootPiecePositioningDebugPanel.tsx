@@ -1,10 +1,10 @@
 import { Card, Tag, Typography } from 'antd';
-import type { FootPiecePositioningGeometry } from '../types';
+import type { AlignedFootPieceGeometry } from '../types';
 
 const { Text } = Typography;
 
 interface FootPiecePositioningDebugPanelProps {
-    footPiece?: FootPiecePositioningGeometry;
+    footPiece?: AlignedFootPieceGeometry;
 }
 
 function formatNumber(value?: number, digits = 5): string {
@@ -13,6 +13,16 @@ function formatNumber(value?: number, digits = 5): string {
 
 function formatPoint(point?: { x: number; y: number }, unit = 'cm'): string {
     return point ? `(${formatNumber(point.x)}, ${formatNumber(point.y)}) ${unit}` : '—';
+}
+
+function formatVector(vector?: { x: number; y: number }): string {
+    return vector ? `(${formatNumber(vector.x)}, ${formatNumber(vector.y)})` : '—';
+}
+
+function degrees(radians?: number): string {
+    return radians === undefined || !Number.isFinite(radians)
+        ? '—'
+        : `${((radians * 180) / Math.PI).toFixed(4)}°`;
 }
 
 const DebugRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
@@ -41,109 +51,164 @@ const CheckRow: React.FC<{
 const FootPiecePositioningDebugPanel: React.FC<FootPiecePositioningDebugPanelProps> = ({
     footPiece,
 }) => {
-    const positioning = footPiece?.positioning;
-    const checks = positioning?.checks;
+    const automatic = footPiece?.automaticPositioning;
+    const source = automatic?.source;
+    const HStar = source?.sourceMidHeel;
+    const W = source?.sourceSecondToe;
+    const checks = automatic?.checks;
+    const tangentFootAngle =
+        HStar &&
+        Math.acos(
+            Math.max(
+                -1,
+                Math.min(
+                    1,
+                    HStar.tangent.x * HStar.footDirection.x +
+                        HStar.tangent.y * HStar.footDirection.y,
+                ),
+            ),
+        );
 
     return (
-        <Card size="small" title="F / Foot Piece Positioning" className="foot-drafting-debug-card">
-            <DebugRow label="F selection state" value={positioning?.selectionState ?? 'none'} />
+        <Card size="small" title="Automatic Foot Axis" className="foot-drafting-debug-card">
             <DebugRow
-                label="F source segment"
-                value={positioning?.selection?.segmentIndex ?? '—'}
+                label="Alignment mode"
+                value={footPiece?.alignmentAssumption ?? 'automatic-midheel-secondtoe-axis'}
             />
             <DebugRow
-                label="F source segment t"
-                value={formatNumber(positioning?.selection?.segmentT)}
-            />
-            <DebugRow
-                label="F source coordinate"
-                value={formatPoint(positioning?.sourceF, 'DXF units')}
-            />
-            <DebugRow
-                label="F provisional coordinate"
-                value={formatPoint(positioning?.provisionalF)}
-            />
-            <DebugRow
-                label="F final aligned coordinate"
-                value={formatPoint(positioning?.alignedF)}
-            />
-            <DebugRow
-                label="Final translation vector"
+                label="Foot Piece positioning"
                 value={
-                    positioning?.translationVectorCm
-                        ? `(${formatNumber(positioning.translationVectorCm.x)}, ${formatNumber(
-                              positioning.translationVectorCm.y,
+                    <Tag color={automatic ? 'success' : 'default'}>
+                        {automatic?.status ?? 'WAITING'}
+                    </Tag>
+                }
+            />
+            <DebugRow label="Mid Heel source" value={automatic ? 'AUTO' : '—'} />
+            <DebugRow label="Second Toe source" value={automatic ? 'AUTO' : '—'} />
+
+            <DebugRow label="H* source" value={formatPoint(HStar?.point, 'DXF units')} />
+            <DebugRow
+                label="H* heel-arc identity"
+                value={
+                    HStar
+                        ? `segment ${HStar.heelArcSegmentIndex} · t ${formatNumber(
+                              HStar.heelArcSegmentT,
+                          )}`
+                        : '—'
+                }
+            />
+            <DebugRow
+                label="H* longitudinal projection"
+                value={`${formatNumber(HStar?.longitudinalProjection)} DXF units`}
+            />
+            <DebugRow label="H* tangent" value={formatVector(HStar?.tangent)} />
+            <DebugRow label="Foot direction" value={formatVector(HStar?.footDirection)} />
+            <DebugRow label="Toe normal" value={formatVector(HStar?.normalTowardToe)} />
+            <DebugRow label="Tangent / footDirection angle" value={degrees(tangentFootAngle)} />
+            <DebugRow
+                label="Tangent · footDirection"
+                value={formatNumber(HStar?.orthogonalityError, 8)}
+            />
+            <DebugRow label="H* confidence" value={HStar?.confidence ?? '—'} />
+
+            <DebugRow label="W source" value={formatPoint(W?.point, 'DXF units')} />
+            <DebugRow
+                label="W Q-P identity"
+                value={
+                    W
+                        ? `segment ${W.toeArcSegmentIndex} · t ${formatNumber(W.toeArcSegmentT)}`
+                        : '—'
+                }
+            />
+            <DebugRow label="W ray candidates" value={W?.intersectionCandidateCount ?? '—'} />
+            <DebugRow
+                label="H*W distance"
+                value={`${formatNumber(source?.hwDistanceRaw)} DXF units`}
+            />
+            <DebugRow label="Source Ms" value={formatPoint(source?.sourceMs, 'DXF units')} />
+            <DebugRow
+                label="Source midpoint(R,S)"
+                value={formatPoint(source?.rsMidpoint, 'DXF units')}
+            />
+            <DebugRow
+                label="Ms vs RS midpoint"
+                value={`${formatNumber(source?.sourceMsVsRsMidpointDistanceRaw)} DXF units`}
+            />
+            <DebugRow
+                label="Source H*W / RS angle"
+                value={degrees(source?.longitudinalTransverseAngleRadians)}
+            />
+
+            <DebugRow label="Scale to cm" value={formatNumber(footPiece?.scaleToCm, 8)} />
+            <DebugRow label="Rotation" value={degrees(footPiece?.rotationRadians)} />
+            <DebugRow
+                label="Translation"
+                value={
+                    automatic
+                        ? `(${formatNumber(automatic.translationVectorCm.x)}, ${formatNumber(
+                              automatic.translationVectorCm.y,
                           )}) cm`
                         : '—'
                 }
             />
-            <DebugRow
-                label="RS line error (R / S)"
-                value={
-                    checks
-                        ? `${formatNumber(
-                              checks.rsInlineWithMPrimeG.rLineDistanceCm,
-                          )} / ${formatNumber(checks.rsInlineWithMPrimeG.sLineDistanceCm)} cm`
-                        : '—'
-                }
-            />
-            <DebugRow
-                label="M'F perpendicular error"
-                value={formatNumber(checks?.mPrimeFPerpendicular.absoluteNormalizedDot, 8)}
-            />
-            <DebugRow
-                label="F centre-line error"
-                value={`${formatNumber(checks?.fOnCentreLine.lineErrorCm)} cm`}
-            />
-            <DebugRow label="Alignment mode" value={positioning?.alignmentMode ?? '—'} />
-            <DebugRow
-                label="Foot Piece positioning"
-                value={
-                    <Tag color={positioning?.status === 'VALID' ? 'success' : 'warning'}>
-                        {positioning?.status ?? 'PROVISIONAL'}
-                    </Tag>
-                }
-            />
+            <DebugRow label="Aligned H*" value={formatPoint(automatic?.alignedSourceMidHeel)} />
+            <DebugRow label="Aligned W" value={formatPoint(automatic?.alignedSourceSecondToe)} />
+            <DebugRow label="Aligned Ms" value={formatPoint(automatic?.alignedSourceMs)} />
 
             <CheckRow
-                label="F selected"
-                details="F identity is restricted to a Q-P source segment and t."
-                pass={checks?.fSelected.pass}
+                label="Aligned Ms = target M'"
+                details={`error ${formatNumber(
+                    checks?.sourceMsToMPrime.distanceCm,
+                )} cm · tol ${formatNumber(checks?.sourceMsToMPrime.toleranceCm)} cm`}
+                pass={checks?.sourceMsToMPrime.pass}
             />
             <CheckRow
-                label="RS inline with M'G"
-                details={
-                    checks
-                        ? `R ${formatNumber(
-                              checks.rsInlineWithMPrimeG.rLineDistanceCm,
-                          )} cm · S ${formatNumber(
-                              checks.rsInlineWithMPrimeG.sLineDistanceCm,
-                          )} cm · tol ±${formatNumber(checks.rsInlineWithMPrimeG.toleranceCm)} cm`
-                        : 'Waiting for foot-piece geometry.'
-                }
-                pass={checks?.rsInlineWithMPrimeG.pass}
-            />
-            <CheckRow
-                label="M'F perpendicular to M'G"
-                details={`absolute normalized dot ${formatNumber(
-                    checks?.mPrimeFPerpendicular.absoluteNormalizedDot,
+                label="Aligned H*-W = target O-M'"
+                details={`angle ${degrees(
+                    checks?.axisToOMPrime.angleErrorRadians,
+                )} · direction dot ${formatNumber(
+                    checks?.axisToOMPrime.directionDot,
                     8,
-                )} · tol ${formatNumber(checks?.mPrimeFPerpendicular.tolerance, 8)}`}
-                pass={checks?.mPrimeFPerpendicular.pass}
+                )} · H*/W line error ${formatNumber(
+                    checks?.axisToOMPrime.hLineDistanceCm,
+                )}/${formatNumber(checks?.axisToOMPrime.wLineDistanceCm)} cm`}
+                pass={checks?.axisToOMPrime.pass}
             />
             <CheckRow
-                label="F on M' perpendicular centre line"
-                details={`line error ${formatNumber(
-                    checks?.fOnCentreLine.lineErrorCm,
-                )} cm · tol ±${formatNumber(checks?.fOnCentreLine.toleranceCm)} cm`}
-                pass={checks?.fOnCentreLine.pass}
+                label="H* heel-side / W toe-side"
+                details={`H* projection ${formatNumber(
+                    checks?.heelToeSides.heelProjectionCm,
+                )} cm · W projection ${formatNumber(checks?.heelToeSides.toeProjectionCm)} cm`}
+                pass={checks?.heelToeSides.pass}
             />
             <CheckRow
-                label="F source identity preserved"
-                details={`aligned identity distance ${formatNumber(
-                    checks?.sourceIdentityPreserved.alignedDistanceCm,
-                )} cm · tol ±${formatNumber(checks?.sourceIdentityPreserved.toleranceCm)} cm`}
-                pass={checks?.sourceIdentityPreserved.pass}
+                label="Uniform transform preserved"
+                details={`maximum pair-distance error ${formatNumber(
+                    checks?.uniformTransform.maximumDistanceErrorCm,
+                    8,
+                )} cm`}
+                pass={checks?.uniformTransform.pass}
+            />
+            <CheckRow
+                label="W source identity preserved"
+                details={`aligned identity error ${formatNumber(
+                    checks?.secondToeIdentityPreserved.distanceCm,
+                    8,
+                )} cm`}
+                pass={checks?.secondToeIdentityPreserved.pass}
+            />
+
+            <DebugRow
+                label="Diagnostic: original RS vs M'G"
+                value={degrees(automatic?.diagnostics.alignedRsVsMPrimeGAngleRadians)}
+            />
+            <DebugRow
+                label="Diagnostic: R distance to M'G"
+                value={`${formatNumber(automatic?.diagnostics.alignedRDistanceToMPrimeG)} cm`}
+            />
+            <DebugRow
+                label="Diagnostic: S distance to M'G"
+                value={`${formatNumber(automatic?.diagnostics.alignedSDistanceToMPrimeG)} cm`}
             />
         </Card>
     );
