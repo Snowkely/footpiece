@@ -171,6 +171,10 @@ const TargetMultiSupportOuterCurveDebugPanel: React.FC<
             value={formatDiagnostic(candidate?.diagnostics.meanToeTurningDeg)}
         />
         <DebugRow
+            label="Toe turning variation"
+            value={formatDiagnostic(candidate?.diagnostics.toeTurningVariationDeg)}
+        />
+        <DebugRow
             label="Support chord turns"
             value={
                 candidate

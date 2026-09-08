@@ -32,6 +32,7 @@ import {
 import CandidateLufCurve from './CandidateLufCurve';
 import ConstructionPoint from './ConstructionPoint';
 import FootPieceFSelector from './FootPieceFSelector';
+import SearchPreviewAnchorsLayer from './SearchPreviewAnchorsLayer';
 import TargetAnkleIntersectionsLayer from './TargetAnkleIntersectionsLayer';
 import TargetMultiSupportOuterCurveLayer from './TargetMultiSupportOuterCurveLayer';
 import TargetReferenceArcLayer from './TargetReferenceArcLayer';
@@ -237,6 +238,7 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
     const [showTargetMultiSupportOuterCurve, setShowTargetMultiSupportOuterCurve] = useState(true);
     const [showSearchPreviewMultiSupportOuterCurve, setShowSearchPreviewMultiSupportOuterCurve] =
         useState(true);
+    const [showSearchPreviewAnchors, setShowSearchPreviewAnchors] = useState(false);
     const [showToeRadialReferences, setShowToeRadialReferences] = useState(true);
     const [showToeOuterSupports, setShowToeOuterSupports] = useState(true);
     const [layerControlsExpanded, setLayerControlsExpanded] = useState(true);
@@ -562,6 +564,21 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
                                 Show Search Preview Candidate
                             </label>
                         )}
+                        <label
+                            title={
+                                searchPreviewMultiSupportOuterCurve
+                                    ? undefined
+                                    : 'No search/suggested preview candidate selected.'
+                            }
+                        >
+                            <Switch
+                                size="small"
+                                disabled={!searchPreviewMultiSupportOuterCurve}
+                                checked={showSearchPreviewAnchors}
+                                onChange={setShowSearchPreviewAnchors}
+                            />
+                            Show Search Preview Anchors
+                        </label>
                     </div>
                 )}
             </div>
@@ -670,8 +687,14 @@ const FootPatternScene: React.FC<FootPatternSceneProps> = ({
                                         color="#06b6d4"
                                         lineWidth={3}
                                         zOffset={1.05}
+                                        showAnchors={false}
                                     />
                                 )}
+                            {searchPreviewMultiSupportOuterCurve && showSearchPreviewAnchors && (
+                                <SearchPreviewAnchorsLayer
+                                    candidate={searchPreviewMultiSupportOuterCurve}
+                                />
+                            )}
                             {manualFootPiece && (
                                 <FootPieceFSelector
                                     footPiece={manualFootPiece}

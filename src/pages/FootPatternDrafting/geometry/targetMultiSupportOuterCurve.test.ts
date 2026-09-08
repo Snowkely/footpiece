@@ -148,6 +148,7 @@ describe('multi-support anchor order and spline generation', () => {
         expect(first.candidate.polylinePoints.every((value) => Number.isFinite(value.y))).toBe(
             true,
         );
+        expect(first.candidate.diagnostics.toeTurningVariationDeg).toBeGreaterThanOrEqual(0);
         expect(second).toEqual(first.result);
     });
 

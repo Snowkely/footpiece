@@ -6,6 +6,7 @@ import type {
     NearbyMultiSupportSearchSeed,
 } from '../geometry/targetMultiSupportOuterCurveSearch';
 import type { NearbyMultiSupportSearchController } from '../hooks/useNearbyMultiSupportSearch';
+import type { SuggestedMultiSupportCandidatesController } from '../hooks/useSuggestedMultiSupportCandidates';
 import NearbyMultiSupportSearchControls from './NearbyMultiSupportSearchControls';
 
 const seed: NearbyMultiSupportSearchSeed = {
@@ -98,8 +99,56 @@ function controller(
     };
 }
 
+function suggestions(
+    overrides: Partial<SuggestedMultiSupportCandidatesController> = {},
+): SuggestedMultiSupportCandidatesController {
+    return {
+        rankingConfig: {
+            resultCount: 5,
+            weights: {
+                lEndpointMismatch: 0.25,
+                gPrimeEndpointMismatch: 0.25,
+                maxToeTurning: 0.25,
+                toeTurningVariation: 0.25,
+            },
+            diversityThreshold: 0.15,
+        },
+        errors: [],
+        previewIsCurrentSuggestion: false,
+        setRankingConfig: jest.fn(),
+        selectSuggestion: jest.fn(),
+        selectPrevious: jest.fn(),
+        selectNext: jest.fn(),
+        clearSelection: jest.fn(),
+        ...overrides,
+    };
+}
+
 describe('NearbyMultiSupportSearchControls', () => {
     afterEach(cleanup);
+
+    it('shows Suggested Results first and keeps All Valid Results collapsed by default', () => {
+        const searchController = controller({
+            status: 'COMPLETED',
+            result: searchResult(),
+            selectedCandidateId: 1,
+            selectedCandidate: firstCandidate,
+        });
+        render(
+            createElement(NearbyMultiSupportSearchControls, {
+                manualSeed: seed,
+                inputsAvailable: true,
+                controller: searchController,
+                suggestedCandidates: suggestions(),
+                onApplyCandidate: jest.fn(),
+            }),
+        );
+
+        expect(screen.getByText('Suggested Results')).toBeTruthy();
+        expect(screen.queryByRole('listitem', { name: 'Preview candidate #1' })).toBeNull();
+        fireEvent.click(screen.getByText('All Valid Results'));
+        expect(screen.getByRole('listitem', { name: 'Preview candidate #1' })).toBeTruthy();
+    });
 
     it('starts explicitly from the current manual tuple and shows a frozen seed', () => {
         const searchController = controller({ seed: { ...seed } });
@@ -108,6 +157,7 @@ describe('NearbyMultiSupportSearchControls', () => {
                 manualSeed: seed,
                 inputsAvailable: true,
                 controller: searchController,
+                suggestedCandidates: suggestions(),
                 onApplyCandidate: jest.fn(),
             }),
         );
@@ -127,6 +177,7 @@ describe('NearbyMultiSupportSearchControls', () => {
                 manualSeed: { alpha: 0.7, thetaDeg: 12, lambdaCm: 3 },
                 inputsAvailable: true,
                 controller: searchController,
+                suggestedCandidates: suggestions(),
                 onApplyCandidate: jest.fn(),
             }),
         );
@@ -149,15 +200,21 @@ describe('NearbyMultiSupportSearchControls', () => {
                 manualSeed: seed,
                 inputsAvailable: true,
                 controller: searchController,
+                suggestedCandidates: suggestions(),
                 onApplyCandidate: onApply,
             }),
         );
 
+        fireEvent.click(screen.getByText('All Valid Results'));
         fireEvent.click(screen.getByRole('listitem', { name: 'Preview candidate #2' }));
         expect(searchController.selectCandidate).toHaveBeenCalledWith(2);
         expect(onApply).not.toHaveBeenCalled();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Apply Candidate to Manual Controls' }));
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Apply Selected Valid Candidate to Manual Controls',
+            }),
+        );
         expect(onApply).toHaveBeenCalledWith(firstCandidate);
     });
 
@@ -174,10 +231,12 @@ describe('NearbyMultiSupportSearchControls', () => {
                 manualSeed: seed,
                 inputsAvailable: true,
                 controller: searchController,
+                suggestedCandidates: suggestions(),
                 onApplyCandidate: jest.fn(),
             }),
         );
 
+        fireEvent.click(screen.getByText('All Valid Results'));
         fireEvent.click(screen.getByRole('button', { name: 'Next' }));
         fireEvent.click(screen.getByRole('button', { name: 'Stop Nearby Search' }));
         expect(searchController.selectNext).toHaveBeenCalledTimes(1);
@@ -222,6 +281,7 @@ describe('NearbyMultiSupportSearchControls', () => {
                 manualSeed: seed,
                 inputsAvailable: true,
                 controller: searchController,
+                suggestedCandidates: suggestions(),
                 onApplyCandidate: jest.fn(),
             }),
         );

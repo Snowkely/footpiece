@@ -22,6 +22,7 @@ import {
     TARGET_OUTER_CURVE_EXTRA_LENGTH_MIN_CM,
     TARGET_OUTER_CURVE_SAMPLE_SEGMENTS,
 } from './targetOuterCurve';
+import { derivePolylineTurningDiagnostics } from './toeTurningDiagnostics';
 
 const MULTI_SUPPORT_ANCHOR_COUNT = 9;
 
@@ -183,28 +184,22 @@ function deriveToeTurningDiagnostics(
     sampledCurve: DraftPoint[],
 ): Pick<
     TargetMultiSupportOuterCurveCandidate['diagnostics'],
-    'maxToeTurningDeg' | 'meanToeTurningDeg'
+    'maxToeTurningDeg' | 'meanToeTurningDeg' | 'toeTurningVariationDeg'
 > {
     const pointsPerInterval = TARGET_OUTER_CURVE_SAMPLE_SEGMENTS / (MULTI_SUPPORT_ANCHOR_COUNT - 1);
     const toeStartIndex = 2 * pointsPerInterval;
     const toeEndIndex = 6 * pointsPerInterval;
-    const turningAngles: number[] = [];
-    for (let index = toeStartIndex + 1; index < toeEndIndex; index += 1) {
-        const incoming = vectorBetween(sampledCurve[index - 1], sampledCurve[index]);
-        const outgoing = vectorBetween(sampledCurve[index], sampledCurve[index + 1]);
-        const angle = angleBetweenDirectionsDegrees(incoming, outgoing);
-        if (Number.isFinite(angle)) {
-            turningAngles.push(angle);
-        }
-    }
-    if (!turningAngles.length) {
+    const diagnostics = derivePolylineTurningDiagnostics(
+        sampledCurve.slice(toeStartIndex, toeEndIndex + 1),
+    );
+    if (!diagnostics) {
         return {};
     }
 
     return {
-        maxToeTurningDeg: Math.max(...turningAngles),
-        meanToeTurningDeg:
-            turningAngles.reduce((total, angle) => total + angle, 0) / turningAngles.length,
+        maxToeTurningDeg: diagnostics.maxTurningDeg,
+        meanToeTurningDeg: diagnostics.meanTurningDeg,
+        toeTurningVariationDeg: diagnostics.turningVariationDeg,
     };
 }
 

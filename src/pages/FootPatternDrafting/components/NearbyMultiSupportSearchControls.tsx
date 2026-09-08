@@ -22,7 +22,9 @@ import {
     MAX_NEARBY_SEARCH_EVALUATIONS,
 } from '../geometry/targetMultiSupportOuterCurveSearch';
 import type { NearbyMultiSupportSearchController } from '../hooks/useNearbyMultiSupportSearch';
+import type { SuggestedMultiSupportCandidatesController } from '../hooks/useSuggestedMultiSupportCandidates';
 import NearbyValidCandidateHistory from './NearbyValidCandidateHistory';
+import SuggestedMultiSupportCandidates from './SuggestedMultiSupportCandidates';
 
 const { Text } = Typography;
 
@@ -30,6 +32,7 @@ interface NearbyMultiSupportSearchControlsProps {
     manualSeed: NearbyMultiSupportSearchSeed;
     inputsAvailable: boolean;
     controller: NearbyMultiSupportSearchController;
+    suggestedCandidates: SuggestedMultiSupportCandidatesController;
     onApplyCandidate: (candidate: NearbyMultiSupportSearchSeed) => void;
 }
 
@@ -58,6 +61,7 @@ const NearbyMultiSupportSearchControls: React.FC<NearbyMultiSupportSearchControl
     manualSeed,
     inputsAvailable,
     controller,
+    suggestedCandidates,
     onApplyCandidate,
 }) => {
     const [config, setConfig] = useState<NearbyMultiSupportSearchConfig>(cloneDefaultConfig);
@@ -122,6 +126,7 @@ const NearbyMultiSupportSearchControls: React.FC<NearbyMultiSupportSearchControl
                     disabled={!inputsAvailable || running || !estimate.geometry}
                     onClick={() => {
                         setExpansionFeedback(undefined);
+                        suggestedCandidates.clearSelection();
                         controller.start({ ...manualSeed }, { ...config });
                     }}
                 >
@@ -137,6 +142,7 @@ const NearbyMultiSupportSearchControls: React.FC<NearbyMultiSupportSearchControl
                     disabled={running || !result}
                     onClick={() => {
                         setExpansionFeedback(undefined);
+                        suggestedCandidates.clearSelection();
                         controller.clear();
                     }}
                 >
@@ -280,26 +286,63 @@ const NearbyMultiSupportSearchControls: React.FC<NearbyMultiSupportSearchControl
                 ]}
             />
 
-            <NearbyValidCandidateHistory
-                candidates={result?.validCandidates ?? []}
-                selectedCandidateId={controller.selectedCandidateId}
+            <SuggestedMultiSupportCandidates
                 status={controller.status}
-                onSelect={controller.selectCandidate}
-                onPrevious={controller.selectPrevious}
-                onNext={controller.selectNext}
+                controller={suggestedCandidates}
+                onApplyCandidate={() => {
+                    if (suggestedCandidates.selectedSourceCandidate) {
+                        onApplyCandidate(suggestedCandidates.selectedSourceCandidate);
+                    }
+                }}
             />
 
-            <Button
-                type="primary"
-                ghost
-                block
-                disabled={!controller.selectedCandidate}
-                onClick={() =>
-                    controller.selectedCandidate && onApplyCandidate(controller.selectedCandidate)
-                }
-            >
-                Apply Candidate to Manual Controls
-            </Button>
+            <Collapse
+                className="foot-drafting-all-valid-results"
+                items={[
+                    {
+                        key: 'all-valid-results',
+                        label: (
+                            <Space>
+                                <span>All Valid Results</span>
+                                <Tag color="cyan">{result?.validCandidateCount ?? 0}</Tag>
+                            </Space>
+                        ),
+                        children: (
+                            <>
+                                <NearbyValidCandidateHistory
+                                    candidates={result?.validCandidates ?? []}
+                                    selectedCandidateId={controller.selectedCandidateId}
+                                    status={controller.status}
+                                    onSelect={(candidateId) => {
+                                        suggestedCandidates.clearSelection();
+                                        controller.selectCandidate(candidateId);
+                                    }}
+                                    onPrevious={() => {
+                                        suggestedCandidates.clearSelection();
+                                        controller.selectPrevious();
+                                    }}
+                                    onNext={() => {
+                                        suggestedCandidates.clearSelection();
+                                        controller.selectNext();
+                                    }}
+                                />
+                                <Button
+                                    type="primary"
+                                    ghost
+                                    block
+                                    disabled={!controller.selectedCandidate}
+                                    onClick={() =>
+                                        controller.selectedCandidate &&
+                                        onApplyCandidate(controller.selectedCandidate)
+                                    }
+                                >
+                                    Apply Selected Valid Candidate to Manual Controls
+                                </Button>
+                            </>
+                        ),
+                    },
+                ]}
+            />
         </Card>
     );
 };

@@ -649,6 +649,7 @@ export interface TargetMultiSupportOuterCurveCandidate {
     diagnostics: TargetOuterCurveCandidate['diagnostics'] & {
         maxToeTurningDeg?: number;
         meanToeTurningDeg?: number;
+        toeTurningVariationDeg?: number;
         supportChordTurningAnglesDeg: {
             W3Prime: number;
             WPrime: number;

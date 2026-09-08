@@ -36,6 +36,7 @@ import {
     deriveToeRadialReferences,
 } from './geometry/toeRadialReferences';
 import { useNearbyMultiSupportSearch } from './hooks/useNearbyMultiSupportSearch';
+import { useSuggestedMultiSupportCandidates } from './hooks/useSuggestedMultiSupportCandidates';
 import './index.less';
 import type {
     AgeGroup,
@@ -314,6 +315,7 @@ const FootPatternDrafting: React.FC = () => {
         targetReferenceArcResult.geometry,
     ]);
     const nearbySearch = useNearbyMultiSupportSearch(nearbySearchInputs);
+    const suggestedCandidates = useSuggestedMultiSupportCandidates(nearbySearch);
     const manualSearchSeed = useMemo<NearbyMultiSupportSearchSeed>(
         () => ({
             alpha: utDistribution,
@@ -457,6 +459,7 @@ const FootPatternDrafting: React.FC = () => {
                         manualSeed={manualSearchSeed}
                         inputsAvailable={Boolean(nearbySearchInputs)}
                         controller={nearbySearch}
+                        suggestedCandidates={suggestedCandidates}
                         onApplyCandidate={(candidate) => {
                             setUtDistribution(candidate.alpha);
                             setToeRadialAngleDeg(candidate.thetaDeg);
@@ -516,6 +519,7 @@ const FootPatternDrafting: React.FC = () => {
                         toeRadialOuterSupports={toeRadialOuterSupportResult.geometry}
                         toeRadialOuterSupportErrors={toeRadialOuterSupportResult.errors}
                         nearbySearch={nearbySearch}
+                        suggestedCandidates={suggestedCandidates}
                         derivedGeometry={{
                             x: backPieceResult.derived?.x,
                             z: backPieceResult.derived?.z,

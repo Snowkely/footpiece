@@ -1,5 +1,6 @@
 import { Alert, Card, Tag, Typography } from 'antd';
 import type { NearbyMultiSupportSearchController } from '../hooks/useNearbyMultiSupportSearch';
+import type { SuggestedMultiSupportCandidatesController } from '../hooks/useSuggestedMultiSupportCandidates';
 import type {
     AgeGroup,
     AlignedFootPieceGeometry,
@@ -26,6 +27,7 @@ import DerivedValuesPanel from './DerivedValuesPanel';
 import FootPieceDebugPanel from './FootPieceDebugPanel';
 import FootPiecePositioningDebugPanel from './FootPiecePositioningDebugPanel';
 import NearbyMultiSupportSearchDebugPanel from './NearbyMultiSupportSearchDebugPanel';
+import SuggestedMultiSupportCandidatesDebugPanel from './SuggestedMultiSupportCandidatesDebugPanel';
 import TargetAnkleIntersectionsDebugPanel from './TargetAnkleIntersectionsDebugPanel';
 import TargetMultiSupportOuterCurveDebugPanel from './TargetMultiSupportOuterCurveDebugPanel';
 import TargetReferenceArcDebugPanel from './TargetReferenceArcDebugPanel';
@@ -63,6 +65,7 @@ interface GeometryDebugPanelProps {
     toeRadialOuterSupports?: ToeRadialOuterSupportGeometry;
     toeRadialOuterSupportErrors: GeometryValidationError[];
     nearbySearch: NearbyMultiSupportSearchController;
+    suggestedCandidates: SuggestedMultiSupportCandidatesController;
     derivedGeometry: {
         x?: number;
         z?: number;
@@ -137,6 +140,7 @@ const GeometryDebugPanel: React.FC<GeometryDebugPanelProps> = ({
     toeRadialOuterSupports,
     toeRadialOuterSupportErrors,
     nearbySearch,
+    suggestedCandidates,
     derivedGeometry,
     errors,
 }) => {
@@ -231,6 +235,11 @@ const GeometryDebugPanel: React.FC<GeometryDebugPanelProps> = ({
             />
 
             <NearbyMultiSupportSearchDebugPanel controller={nearbySearch} />
+
+            <SuggestedMultiSupportCandidatesDebugPanel
+                status={nearbySearch.status}
+                controller={suggestedCandidates}
+            />
 
             {errors.map((error) => (
                 <Alert

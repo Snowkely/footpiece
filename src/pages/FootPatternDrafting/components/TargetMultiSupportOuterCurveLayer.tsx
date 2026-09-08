@@ -7,6 +7,7 @@ interface TargetMultiSupportOuterCurveLayerProps {
     color?: string;
     lineWidth?: number;
     zOffset?: number;
+    showAnchors?: boolean;
 }
 
 const VALID_COLOR = '#1d4ed8';
@@ -18,6 +19,7 @@ const TargetMultiSupportOuterCurveLayer: React.FC<TargetMultiSupportOuterCurveLa
     color: colorOverride,
     lineWidth = 4,
     zOffset = 0.9,
+    showAnchors = true,
 }) => {
     const color = colorOverride ?? (candidate.valid ? VALID_COLOR : INVALID_COLOR);
 
@@ -35,18 +37,19 @@ const TargetMultiSupportOuterCurveLayer: React.FC<TargetMultiSupportOuterCurveLa
                 transparent
                 opacity={candidate.valid ? 1 : 0.82}
             />
-            {candidate.anchorOrder.map((id) => {
-                const point = candidate.anchors[id];
-                return (
-                    <Sphere
-                        key={id}
-                        args={[ANCHOR_RADIUS_CM, 16, 16]}
-                        position={[point.x, point.y, zOffset + 0.03]}
-                    >
-                        <meshBasicMaterial color={color} />
-                    </Sphere>
-                );
-            })}
+            {showAnchors &&
+                candidate.anchorOrder.map((id) => {
+                    const point = candidate.anchors[id];
+                    return (
+                        <Sphere
+                            key={id}
+                            args={[ANCHOR_RADIUS_CM, 16, 16]}
+                            position={[point.x, point.y, zOffset + 0.03]}
+                        >
+                            <meshBasicMaterial color={color} />
+                        </Sphere>
+                    );
+                })}
         </group>
     );
 };

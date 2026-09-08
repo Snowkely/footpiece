@@ -5,6 +5,8 @@ import FootPatternScene from './FootPatternScene';
 
 const mockCameraReset = jest.fn();
 const mockCameraFitToBox = jest.fn();
+const mockTargetMultiSupportOuterCurveLayer = jest.fn();
+const mockSearchPreviewAnchorsLayer = jest.fn();
 
 jest.mock('@react-three/fiber', () => {
     const ReactModule = jest.requireActual('react');
@@ -36,6 +38,22 @@ jest.mock('@react-three/drei', () => {
     };
 });
 
+jest.mock('./TargetMultiSupportOuterCurveLayer', () => ({
+    __esModule: true,
+    default: (props: any) => {
+        mockTargetMultiSupportOuterCurveLayer(props);
+        return null;
+    },
+}));
+
+jest.mock('./SearchPreviewAnchorsLayer', () => ({
+    __esModule: true,
+    default: (props: any) => {
+        mockSearchPreviewAnchorsLayer(props);
+        return null;
+    },
+}));
+
 const multiSupportCandidate: any = {
     alpha: 0.5,
     thetaDeg: 10,
@@ -44,16 +62,26 @@ const multiSupportCandidate: any = {
     polylinePoints: [{ id: 'candidate-point', x: 0, y: 0 }],
 };
 
+const frontPiece: any = {
+    points: {
+        O: { id: 'O', x: 0, y: 5 },
+        MPrime: { id: "M'", x: 0, y: 0 },
+    },
+    lines: [],
+};
+
+function sceneProps(overrides: Record<string, any> = {}) {
+    return {
+        targetMultiSupportOuterCurve: multiSupportCandidate,
+        fSelectionMode: false,
+        onHoverFSelectionChange: jest.fn(),
+        onSelectF: jest.fn(),
+        ...overrides,
+    };
+}
+
 function renderScene(overrides: Record<string, any> = {}) {
-    return render(
-        createElement(FootPatternScene, {
-            targetMultiSupportOuterCurve: multiSupportCandidate,
-            fSelectionMode: false,
-            onHoverFSelectionChange: jest.fn(),
-            onSelectF: jest.fn(),
-            ...overrides,
-        }),
-    );
+    return render(createElement(FootPatternScene, sceneProps(overrides)));
 }
 
 function getShrinkedOutlineSwitch(): HTMLElement {
@@ -78,9 +106,20 @@ function getButtonByText(text: string): HTMLButtonElement {
 }
 
 describe('FootPatternScene layer controls', () => {
+    beforeAll(() => {
+        (globalThis as typeof globalThis & { React?: typeof import('react') }).React =
+            jest.requireActual('react');
+    });
+
+    afterAll(() => {
+        delete (globalThis as typeof globalThis & { React?: typeof import('react') }).React;
+    });
+
     beforeEach(() => {
         mockCameraReset.mockClear();
         mockCameraFitToBox.mockClear();
+        mockTargetMultiSupportOuterCurveLayer.mockClear();
+        mockSearchPreviewAnchorsLayer.mockClear();
     });
 
     afterEach(cleanup);
@@ -158,5 +197,96 @@ describe('FootPatternScene layer controls', () => {
 
         expect(searchPreviewSwitch.getAttribute('aria-checked')).toBe('false');
         expect(screen.getByTestId('viewer-canvas')).not.toBeNull();
+    });
+
+    it('keeps preview anchors off by default and does not fall back to manual anchors', () => {
+        renderScene();
+
+        const previewAnchorsLabel = screen
+            .getByText('Show Search Preview Anchors')
+            .closest('label');
+        const previewAnchorsSwitch = previewAnchorsLabel?.querySelector('[role="switch"]');
+        if (!(previewAnchorsSwitch instanceof HTMLButtonElement)) {
+            throw new Error('Search-preview anchor switch was not rendered.');
+        }
+
+        expect(previewAnchorsSwitch.getAttribute('aria-checked')).toBe('false');
+        expect(previewAnchorsSwitch.disabled).toBe(true);
+        expect(previewAnchorsLabel?.getAttribute('title')).toBe(
+            'No search/suggested preview candidate selected.',
+        );
+        expect(mockSearchPreviewAnchorsLayer).not.toHaveBeenCalled();
+    });
+
+    it('renders the active cyan curve and anchors from the exact same preview candidate', () => {
+        const firstPreview = { ...multiSupportCandidate, alpha: 0.42, thetaDeg: 8.5 };
+        const secondPreview = { ...multiSupportCandidate, alpha: 0.64, thetaDeg: 12 };
+        const view = renderScene({
+            frontPiece,
+            searchPreviewMultiSupportOuterCurve: firstPreview,
+        });
+        const previewAnchorsLabel = screen
+            .getByText('Show Search Preview Anchors')
+            .closest('label');
+        const previewAnchorsSwitch = previewAnchorsLabel?.querySelector('[role="switch"]');
+        if (!(previewAnchorsSwitch instanceof HTMLElement)) {
+            throw new Error('Search-preview anchor switch was not rendered.');
+        }
+
+        const firstCurveProps = mockTargetMultiSupportOuterCurveLayer.mock.calls
+            .map(([props]) => props)
+            .find((props) => props.color === '#06b6d4');
+        expect(firstCurveProps.candidate).toBe(firstPreview);
+        expect(firstCurveProps.showAnchors).toBe(false);
+        expect(mockSearchPreviewAnchorsLayer).not.toHaveBeenCalled();
+
+        fireEvent.click(previewAnchorsSwitch);
+
+        expect(previewAnchorsSwitch.getAttribute('aria-checked')).toBe('true');
+        expect(mockSearchPreviewAnchorsLayer).toHaveBeenLastCalledWith(
+            expect.objectContaining({ candidate: firstPreview }),
+        );
+
+        view.rerender(
+            createElement(
+                FootPatternScene,
+                sceneProps({
+                    frontPiece,
+                    searchPreviewMultiSupportOuterCurve: secondPreview,
+                }),
+            ),
+        );
+
+        const latestCurveProps = mockTargetMultiSupportOuterCurveLayer.mock.calls
+            .map(([props]) => props)
+            .filter((props) => props.color === '#06b6d4')
+            .at(-1);
+        expect(latestCurveProps.candidate).toBe(secondPreview);
+        expect(mockSearchPreviewAnchorsLayer).toHaveBeenLastCalledWith(
+            expect.objectContaining({ candidate: secondPreview }),
+        );
+        expect(previewAnchorsSwitch.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('does not change the manual layer or preview candidate when its anchor toggle changes', () => {
+        const preview = { ...multiSupportCandidate, alpha: 0.73, thetaDeg: 14 };
+        const snapshot = JSON.stringify({ manual: multiSupportCandidate, preview });
+        renderScene({ frontPiece, searchPreviewMultiSupportOuterCurve: preview });
+        const previewAnchorsLabel = screen
+            .getByText('Show Search Preview Anchors')
+            .closest('label');
+        const previewAnchorsSwitch = previewAnchorsLabel?.querySelector('[role="switch"]');
+        if (!(previewAnchorsSwitch instanceof HTMLElement)) {
+            throw new Error('Search-preview anchor switch was not rendered.');
+        }
+
+        fireEvent.click(previewAnchorsSwitch);
+
+        const manualLayerProps = mockTargetMultiSupportOuterCurveLayer.mock.calls
+            .map(([props]) => props)
+            .find((props) => props.candidate === multiSupportCandidate);
+        expect(manualLayerProps.color).toBeUndefined();
+        expect(manualLayerProps.showAnchors).toBeUndefined();
+        expect(JSON.stringify({ manual: multiSupportCandidate, preview })).toBe(snapshot);
     });
 });
