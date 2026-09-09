@@ -105,12 +105,20 @@ export function pointAlongRay(
     };
 }
 
-export function mirrorAcrossCenterLine(point: DraftPoint, id: string, centerLineX = 0): DraftPoint {
+export function mirrorPointAcrossVerticalAxis(
+    point: DraftPoint,
+    axisX: number,
+    id = point.id,
+): DraftPoint {
     return {
         id,
-        x: centerLineX * 2 - point.x,
+        x: axisX * 2 - point.x,
         y: point.y,
     };
+}
+
+export function mirrorAcrossCenterLine(point: DraftPoint, id: string, centerLineX = 0): DraftPoint {
+    return mirrorPointAcrossVerticalAxis(point, centerLineX, id);
 }
 
 export function createDistanceCheck(

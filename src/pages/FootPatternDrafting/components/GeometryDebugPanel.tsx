@@ -113,6 +113,57 @@ const CheckList: React.FC<{ title: string; checks?: GeometryCheck[] }> = ({ titl
     </Card>
 );
 
+const BackPieceSymmetryPanel: React.FC<{ backPiece?: BackPieceGeometry }> = ({ backPiece }) => {
+    const symmetry = backPiece?.symmetry;
+
+    return (
+        <Card size="small" title="Back Piece Symmetry" className="foot-drafting-debug-card">
+            {!symmetry ? (
+                <Text type="secondary">Complete a valid back piece to run symmetry checks.</Text>
+            ) : (
+                <>
+                    <div className="foot-drafting-value-row">
+                        <Text>Axis X</Text>
+                        <Text>{formatCentimeters(symmetry.axisX)}</Text>
+                    </div>
+                    <div className="foot-drafting-value-row">
+                        <Text>O/N/M/A center axis</Text>
+                        <Tag color={symmetry.centerlineCheck.pass ? 'success' : 'error'}>
+                            {symmetry.centerlineCheck.pass ? 'PASS' : 'FAIL'}
+                        </Tag>
+                    </div>
+                    {symmetry.mirrorChecks.map((check) => (
+                        <div className="foot-drafting-value-row" key={check.id}>
+                            <Text>{check.label}</Text>
+                            <Tag color={check.pass ? 'success' : 'error'}>
+                                {check.pass ? 'PASS' : 'FAIL'}
+                            </Tag>
+                        </div>
+                    ))}
+                    <div className="foot-drafting-value-row">
+                        <Text>Mirrored segment lengths</Text>
+                        <Tag
+                            color={
+                                symmetry.segmentLengthChecks.every((check) => check.pass)
+                                    ? 'success'
+                                    : 'error'
+                            }
+                        >
+                            {symmetry.segmentLengthChecks.every((check) => check.pass)
+                                ? 'PASS'
+                                : 'FAIL'}
+                        </Tag>
+                    </div>
+                    <div className="foot-drafting-value-row">
+                        <Text>Max mirror error</Text>
+                        <Text>{formatCentimeters(symmetry.maxMirrorCoordinateErrorCm)}</Text>
+                    </div>
+                </>
+            )}
+        </Card>
+    );
+};
+
 const GeometryDebugPanel: React.FC<GeometryDebugPanelProps> = ({
     inputMode,
     rawMeasurements,
@@ -252,6 +303,7 @@ const GeometryDebugPanel: React.FC<GeometryDebugPanelProps> = ({
             ))}
 
             <CheckList title="Back piece checks" checks={backPiece?.checks} />
+            <BackPieceSymmetryPanel backPiece={backPiece} />
             <CheckList title="Front piece checks" checks={frontPiece?.checks} />
         </div>
     );

@@ -27,6 +27,26 @@ describe('buildBackPiece', () => {
         expect(geometry?.points.C.x).toBe(parameters.d / 4);
         expect(geometry?.points.D.x).toBe(parameters.f / 2);
         expect(geometry?.points.E.x).toBe((parameters.r as number) / 2);
+        expect(geometry?.points.BPrime).toEqual({
+            id: "B'",
+            x: -parameters.c / 4,
+            y: geometry.points.B.y,
+        });
+        expect(geometry?.points.CPrime).toEqual({
+            id: "C'",
+            x: -parameters.d / 4,
+            y: geometry.points.C.y,
+        });
+        expect(geometry?.points.DPrime).toEqual({
+            id: "D'",
+            x: -parameters.f / 2,
+            y: geometry.points.D.y,
+        });
+        expect(geometry?.points.EPrime).toEqual({
+            id: "E'",
+            x: -(parameters.r as number) / 2,
+            y: geometry.points.E.y,
+        });
         expect(geometry?.x).toBeCloseTo(distance(geometry!.points.D, geometry!.points.E));
         expect(geometry?.z).toBeCloseTo(distance(geometry!.points.C, geometry!.points.D));
         expect(geometry?.checks.every((check) => check.pass)).toBe(true);
@@ -59,6 +79,27 @@ describe('buildBackPiece', () => {
         expect(geometry.lines.find((draftLine) => draftLine.id === 'back-ME')).toBeUndefined();
     });
 
+    it('mirrors the actual right-side topology with matching line semantics', () => {
+        const geometry = buildBackPiece(parameters).geometry!;
+        const expectedMirroredLines = [
+            ["back-OB'", geometry.points.O, geometry.points.BPrime, 'construction'],
+            ["back-NC'", geometry.points.N, geometry.points.CPrime, 'construction'],
+            ["back-MD'", geometry.points.M, geometry.points.DPrime, 'construction'],
+            ["back-B'C'", geometry.points.BPrime, geometry.points.CPrime, 'boundary'],
+            ["back-C'D'", geometry.points.CPrime, geometry.points.DPrime, 'boundary'],
+            ["back-D'E'", geometry.points.DPrime, geometry.points.EPrime, 'boundary'],
+        ] as const;
+
+        expectedMirroredLines.forEach(([id, start, end, kind]) => {
+            expect(geometry.lines.find((draftLine) => draftLine.id === id)).toMatchObject({
+                start,
+                end,
+                kind,
+                dashed: false,
+            });
+        });
+    });
+
     it('completes A/F from front y without changing the base drafting coordinates', () => {
         const backPiece = buildBackPiece(parameters).geometry!;
         const originalPoints = { ...backPiece.points };
@@ -68,6 +109,11 @@ describe('buildBackPiece', () => {
         expect(backPiece.points).toEqual(originalPoints);
         expect(completed.points.F).toEqual({ id: 'F', x: backPiece.points.E.x, y: -frontY });
         expect(completed.points.A).toEqual({ id: 'A', x: 0, y: -frontY });
+        expect(completed.points.FPrime).toEqual({
+            id: "F'",
+            x: -backPiece.points.E.x,
+            y: -frontY,
+        });
         expect(distance(completed.points.E, completed.points.F!)).toBeCloseTo(frontY);
         expect(distance(completed.points.A!, completed.points.F!)).toBeCloseTo(
             distance(completed.points.M, completed.points.E),
@@ -88,8 +134,79 @@ describe('buildBackPiece', () => {
             dashed: true,
             kind: 'centerline',
         });
+        expect(completed.lines.find((draftLine) => draftLine.id === "back-E'F'")).toMatchObject({
+            start: completed.points.EPrime,
+            end: completed.points.FPrime,
+            dashed: false,
+            kind: 'boundary',
+        });
+        expect(completed.lines.find((draftLine) => draftLine.id === "back-F'A")).toMatchObject({
+            start: completed.points.FPrime,
+            end: completed.points.A,
+            dashed: false,
+            kind: 'boundary',
+        });
         expect(completed.checks.find((check) => check.id === 'back-EF')?.pass).toBe(true);
         expect(completed.checks.find((check) => check.id === 'back-AF')?.pass).toBe(true);
+    });
+
+    it('validates centerline, mirrored coordinates, and corresponding segment lengths', () => {
+        const geometry = completeBackPieceWithFrontY(buildBackPiece(parameters).geometry!, 5.8)
+            .geometry!;
+        const pairs = [
+            [geometry.points.B, geometry.points.BPrime],
+            [geometry.points.C, geometry.points.CPrime],
+            [geometry.points.D, geometry.points.DPrime],
+            [geometry.points.E, geometry.points.EPrime],
+            [geometry.points.F!, geometry.points.FPrime!],
+        ];
+
+        expect(geometry.symmetry.axisX).toBe(geometry.points.O.x);
+        expect(geometry.symmetry.centerlineCheck.pass).toBe(true);
+        expect(geometry.symmetry.mirrorChecks).toHaveLength(5);
+        expect(geometry.symmetry.mirrorChecks.every((check) => check.pass)).toBe(true);
+        expect(geometry.symmetry.segmentLengthChecks).toHaveLength(6);
+        expect(geometry.symmetry.segmentLengthChecks.every((check) => check.pass)).toBe(true);
+        expect(geometry.symmetry.maxMirrorCoordinateErrorCm).toBeCloseTo(0);
+        expect(geometry.points.O.x).toBe(geometry.points.N.x);
+        expect(geometry.points.N.x).toBe(geometry.points.M.x);
+        expect(geometry.points.M.x).toBe(geometry.points.A?.x);
+
+        pairs.forEach(([original, mirrored]) => {
+            expect(mirrored.y).toBe(original.y);
+            expect(Math.abs(mirrored.x - geometry.symmetry.axisX)).toBeCloseTo(
+                Math.abs(original.x - geometry.symmetry.axisX),
+            );
+            expect((original.x + mirrored.x) / 2).toBeCloseTo(geometry.symmetry.axisX);
+        });
+    });
+
+    it('keeps right coordinates unchanged and derives a fresh left side for new parameters', () => {
+        const changedParameters = { ...parameters, c: 24, d: 20, f: 12, r: 14 };
+        const base = buildBackPiece(changedParameters).geometry!;
+        const rightBeforeCompletion = {
+            B: { ...base.points.B },
+            C: { ...base.points.C },
+            D: { ...base.points.D },
+            E: { ...base.points.E },
+        };
+        const completed = completeBackPieceWithFrontY(base, 6).geometry!;
+
+        expect(base.points.B).toEqual({ id: 'B', x: changedParameters.c / 4, y: 12 });
+        expect(base.points.C).toEqual({ id: 'C', x: changedParameters.d / 4, y: 7 });
+        expect(base.points.D).toEqual({ id: 'D', x: changedParameters.f / 2, y: 0 });
+        expect(base.points.E).toEqual({ id: 'E', x: changedParameters.r / 2, y: 0 });
+        expect(completed.points.B).toEqual(rightBeforeCompletion.B);
+        expect(completed.points.C).toEqual(rightBeforeCompletion.C);
+        expect(completed.points.D).toEqual(rightBeforeCompletion.D);
+        expect(completed.points.E).toEqual(rightBeforeCompletion.E);
+        expect(completed.points.BPrime.x).toBe(-completed.points.B.x);
+        expect(completed.points.CPrime.x).toBe(-completed.points.C.x);
+        expect(completed.points.DPrime.x).toBe(-completed.points.D.x);
+        expect(completed.points.EPrime.x).toBe(-completed.points.E.x);
+        expect(base.points).not.toHaveProperty('A');
+        expect(base.points).not.toHaveProperty('F');
+        expect(base.points).not.toHaveProperty('FPrime');
     });
 
     it('reports a validation error when temporary r is missing', () => {

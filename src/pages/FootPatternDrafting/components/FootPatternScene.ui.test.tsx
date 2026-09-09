@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
+import { buildBackPiece, completeBackPieceWithFrontY } from '../geometry/backPiece';
 import FootPatternScene from './FootPatternScene';
 
 const mockCameraReset = jest.fn();
@@ -123,6 +124,27 @@ describe('FootPatternScene layer controls', () => {
     });
 
     afterEach(cleanup);
+
+    it('renders the completed Back Piece prime labels from mirrored geometry', () => {
+        const parameters = {
+            a: 14.6,
+            b: 18,
+            c: 18.8,
+            d: 16,
+            e: 11.2,
+            f: 11.2,
+            g: 5,
+            r: 16.8,
+        };
+        const backPiece = completeBackPieceWithFrontY(buildBackPiece(parameters).geometry!, 5)
+            .geometry!;
+
+        renderScene({ backPiece });
+
+        ["B'", "C'", "D'", "E'", "F'"].forEach((label) => {
+            expect(screen.getByText(label)).not.toBeNull();
+        });
+    });
 
     it('is expanded by default and preserves layer-toggle state across hide/show', () => {
         renderScene();

@@ -82,9 +82,24 @@ export interface GeometryBuildResult<T> {
     errors: GeometryValidationError[];
 }
 
-export type BackPieceBasePointId = 'M' | 'N' | 'O' | 'B' | 'C' | 'D' | 'E';
-export type BackPieceCompletionPointId = 'A' | 'F';
+export type BackPieceRightBasePointId = 'B' | 'C' | 'D' | 'E';
+export type BackPieceMirroredBasePointId = 'BPrime' | 'CPrime' | 'DPrime' | 'EPrime';
+export type BackPieceBasePointId =
+    | 'M'
+    | 'N'
+    | 'O'
+    | BackPieceRightBasePointId
+    | BackPieceMirroredBasePointId;
+export type BackPieceCompletionPointId = 'A' | 'F' | 'FPrime';
 export type BackPiecePointId = BackPieceBasePointId | BackPieceCompletionPointId;
+
+export interface BackPieceSymmetryDiagnostics {
+    axisX: number;
+    centerlineCheck: GeometryCheck;
+    mirrorChecks: GeometryCheck[];
+    segmentLengthChecks: GeometryCheck[];
+    maxMirrorCoordinateErrorCm: number;
+}
 
 export interface BackPieceGeometry {
     points: Record<BackPieceBasePointId, DraftPoint> &
@@ -93,6 +108,7 @@ export interface BackPieceGeometry {
     x: number;
     z: number;
     checks: GeometryCheck[];
+    symmetry: BackPieceSymmetryDiagnostics;
 }
 
 export type FrontPiecePointId =

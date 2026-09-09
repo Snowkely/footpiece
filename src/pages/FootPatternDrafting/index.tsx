@@ -1,11 +1,12 @@
 import { ExperimentOutlined } from '@ant-design/icons';
 import { Tag, Typography } from 'antd';
 import React, { useMemo, useState } from 'react';
+import type { AutomaticSearchMode } from './components/AutomaticSearchModeControls';
+import AutomaticSearchModeControls from './components/AutomaticSearchModeControls';
 import FootPatternScene from './components/FootPatternScene';
 import FootPiecePositioningControls from './components/FootPiecePositioningControls';
 import GeometryDebugPanel from './components/GeometryDebugPanel';
 import MeasurementForm from './components/MeasurementForm';
-import NearbyMultiSupportSearchControls from './components/NearbyMultiSupportSearchControls';
 import TargetMultiSupportOuterCurveControls from './components/TargetMultiSupportOuterCurveControls';
 import TargetUtControls from './components/TargetUtControls';
 import TargetWPrimeControls from './components/TargetWPrimeControls';
@@ -35,6 +36,7 @@ import {
     DEFAULT_TOE_RADIAL_ANGLE_DEG,
     deriveToeRadialReferences,
 } from './geometry/toeRadialReferences';
+import { useBroadMultiSupportSearch } from './hooks/useBroadMultiSupportSearch';
 import { useNearbyMultiSupportSearch } from './hooks/useNearbyMultiSupportSearch';
 import { useSuggestedMultiSupportCandidates } from './hooks/useSuggestedMultiSupportCandidates';
 import './index.less';
@@ -83,6 +85,7 @@ const FootPatternDrafting: React.FC = () => {
         DEFAULT_WPRIME_OUTWARD_OFFSET_CM,
     );
     const [toeRadialAngleDeg, setToeRadialAngleDeg] = useState(DEFAULT_TOE_RADIAL_ANGLE_DEG);
+    const [automaticSearchMode, setAutomaticSearchMode] = useState<AutomaticSearchMode>('nearby');
 
     const activeParameters = useMemo<Omit<DraftingParameters, 'r'> | undefined>(() => {
         if (inputMode === 'drafting') {
@@ -315,6 +318,7 @@ const FootPatternDrafting: React.FC = () => {
         targetReferenceArcResult.geometry,
     ]);
     const nearbySearch = useNearbyMultiSupportSearch(nearbySearchInputs);
+    const broadSearch = useBroadMultiSupportSearch(nearbySearchInputs);
     const suggestedCandidates = useSuggestedMultiSupportCandidates(nearbySearch);
     const manualSearchSeed = useMemo<NearbyMultiSupportSearchSeed>(
         () => ({
@@ -324,6 +328,10 @@ const FootPatternDrafting: React.FC = () => {
         }),
         [toeRadialAngleDeg, utDistribution, wPrimeOutwardOffsetCm],
     );
+    const activeSearchPreviewCandidate =
+        automaticSearchMode === 'broad'
+            ? broadSearch.previewCandidate
+            : nearbySearch.previewCandidate;
 
     const validationErrors = [
         ...backPieceResult.errors,
@@ -455,11 +463,14 @@ const FootPatternDrafting: React.FC = () => {
                         candidate={targetMultiSupportOuterCurveResult.geometry}
                         errors={targetMultiSupportOuterCurveResult.errors}
                     />
-                    <NearbyMultiSupportSearchControls
+                    <AutomaticSearchModeControls
+                        mode={automaticSearchMode}
                         manualSeed={manualSearchSeed}
                         inputsAvailable={Boolean(nearbySearchInputs)}
-                        controller={nearbySearch}
+                        nearbyController={nearbySearch}
+                        broadController={broadSearch}
                         suggestedCandidates={suggestedCandidates}
+                        onModeChange={setAutomaticSearchMode}
                         onApplyCandidate={(candidate) => {
                             setUtDistribution(candidate.alpha);
                             setToeRadialAngleDeg(candidate.thetaDeg);
@@ -478,7 +489,7 @@ const FootPatternDrafting: React.FC = () => {
                         targetUt={targetUtResult.geometry}
                         targetWPrime={targetWPrimeResult.geometry}
                         targetMultiSupportOuterCurve={targetMultiSupportOuterCurveResult.geometry}
-                        searchPreviewMultiSupportOuterCurve={nearbySearch.previewCandidate}
+                        searchPreviewMultiSupportOuterCurve={activeSearchPreviewCandidate}
                         toeRadialReferences={toeRadialReferenceResult.geometry}
                         toeRadialOuterSupports={toeRadialOuterSupportResult.geometry}
                         fSelectionMode={selectingF}

@@ -33,6 +33,35 @@ export interface SuggestedCandidateNormalizedMetrics {
     toeTurningVariation?: number;
 }
 
+export type MultiSupportSoftScoreCandidateSource = Pick<
+    NearbyMultiSupportSearchCandidateSummary,
+    | 'id'
+    | 'alpha'
+    | 'thetaDeg'
+    | 'lambdaCm'
+    | 'referenceLengthCm'
+    | 'outerLengthCm'
+    | 'extraLengthCm'
+    | 'diagnostics'
+>;
+
+export interface SoftScoredMultiSupportCandidate<
+    Source extends MultiSupportSoftScoreCandidateSource = MultiSupportSoftScoreCandidateSource,
+> {
+    source: Source;
+    rawMetrics: SuggestedCandidateRawMetrics;
+    normalizedMetrics: SuggestedCandidateNormalizedMetrics;
+    softScore: number;
+}
+
+export interface MultiSupportSoftScoreRankingResult<
+    Source extends MultiSupportSoftScoreCandidateSource = MultiSupportSoftScoreCandidateSource,
+> {
+    candidates: SoftScoredMultiSupportCandidate<Source>[];
+    normalizedWeights: SuggestedCandidateMetricWeights;
+    excludedBecauseDiagnosticsUnavailable: number;
+}
+
 export interface SuggestedMultiSupportCandidate {
     suggestionIndex: number;
     sourceCandidateId: number;
@@ -92,13 +121,6 @@ const METRIC_KEYS: MetricKey[] = [
     'toeTurningVariation',
 ];
 
-interface RankableCandidate {
-    source: NearbyMultiSupportSearchCandidateSummary;
-    rawMetrics: SuggestedCandidateRawMetrics;
-    normalizedMetrics: SuggestedCandidateNormalizedMetrics;
-    softScore: number;
-}
-
 function invalidConfig(message: string): GeometryValidationError {
     return { code: 'SUGGESTED_CANDIDATE_CONFIG_INVALID', message };
 }
@@ -107,9 +129,7 @@ function finiteMetric(value: number | undefined): number | undefined {
     return value !== undefined && Number.isFinite(value) ? value : undefined;
 }
 
-function rawMetrics(
-    candidate: NearbyMultiSupportSearchCandidateSummary,
-): SuggestedCandidateRawMetrics {
+function rawMetrics(candidate: MultiSupportSoftScoreCandidateSource): SuggestedCandidateRawMetrics {
     return {
         lEndpointMismatchDeg: finiteMetric(candidate.diagnostics.lEndpointTangentMismatchDeg),
         gPrimeEndpointMismatchDeg: finiteMetric(
@@ -224,6 +244,69 @@ function calculateSoftScore(
         : weightedTotal / availableWeight;
 }
 
+/**
+ * Shared Step 8 soft-score pipeline. It min-max normalizes the four existing
+ * diagnostics, renormalizes the remaining weights per candidate, and returns a
+ * deterministic score/ID ordering without applying any diversity preference.
+ */
+export function rankMultiSupportCandidatesBySoftScore<
+    Source extends MultiSupportSoftScoreCandidateSource,
+>(
+    validCandidates: readonly Source[],
+    weights: SuggestedCandidateMetricWeights = DEFAULT_SUGGESTED_CANDIDATE_RANKING_CONFIG.weights,
+): GeometryBuildResult<MultiSupportSoftScoreRankingResult<Source>> {
+    const values = Object.values(weights);
+    if (
+        values.some((weight) => !Number.isFinite(weight) || weight < 0) ||
+        values.reduce((total, weight) => total + weight, 0) <= SUGGESTED_NUMERIC_EPSILON
+    ) {
+        return {
+            errors: [
+                invalidConfig(
+                    'Soft-score weights must be finite, non-negative, and include a positive weight.',
+                ),
+            ],
+        };
+    }
+
+    const effectiveWeights = normalizedWeights(weights);
+    const candidateMetrics = validCandidates.map((candidate) => rawMetrics(candidate));
+    const ranges = metricRanges(candidateMetrics);
+    const candidates = validCandidates
+        .map((candidate, index): SoftScoredMultiSupportCandidate<Source> | undefined => {
+            const metrics = candidateMetrics[index];
+            const normalized = normalizeMetrics(metrics, ranges);
+            const softScore = calculateSoftScore(normalized, effectiveWeights);
+            return softScore === undefined
+                ? undefined
+                : {
+                      source: candidate,
+                      rawMetrics: metrics,
+                      normalizedMetrics: normalized,
+                      softScore,
+                  };
+        })
+        .filter(
+            (candidate): candidate is SoftScoredMultiSupportCandidate<Source> =>
+                candidate !== undefined,
+        )
+        .sort((first, second) => {
+            const scoreDifference = first.softScore - second.softScore;
+            return Math.abs(scoreDifference) > SCORE_TIE_TOLERANCE
+                ? scoreDifference
+                : first.source.id - second.source.id;
+        });
+
+    return {
+        geometry: {
+            candidates,
+            normalizedWeights: effectiveWeights,
+            excludedBecauseDiagnosticsUnavailable: validCandidates.length - candidates.length,
+        },
+        errors: [],
+    };
+}
+
 /** Parameter-space distance normalized by the effective nearby-search radii. */
 export function suggestedCandidateParameterDistance(
     first: Pick<NearbyMultiSupportSearchCandidateSummary, 'alpha' | 'thetaDeg' | 'lambdaCm'>,
@@ -262,12 +345,13 @@ export function buildSuggestedDiversityThresholdSequence(requestedThreshold: num
 }
 
 function greedilySelect(
-    ranked: RankableCandidate[],
+    ranked: SoftScoredMultiSupportCandidate<NearbyMultiSupportSearchCandidateSummary>[],
     requestedCount: number,
     threshold: number,
     effectiveSearchConfig: NearbyMultiSupportSearchConfig,
-): RankableCandidate[] {
-    const selected: RankableCandidate[] = [];
+): SoftScoredMultiSupportCandidate<NearbyMultiSupportSearchCandidateSummary>[] {
+    const selected: SoftScoredMultiSupportCandidate<NearbyMultiSupportSearchCandidateSummary>[] =
+        [];
     for (const candidate of ranked) {
         if (
             selected.every(
@@ -304,38 +388,24 @@ export function selectSuggestedMultiSupportCandidates({
         return { errors };
     }
 
+    const rankingResult = rankMultiSupportCandidatesBySoftScore(
+        validCandidates,
+        rankingConfig.weights,
+    );
+    if (!rankingResult.geometry) {
+        return { errors: rankingResult.errors };
+    }
     const normalizedConfig: SuggestedCandidateRankingConfig = {
         resultCount: rankingConfig.resultCount,
-        weights: normalizedWeights(rankingConfig.weights),
+        weights: rankingResult.geometry.normalizedWeights,
         diversityThreshold: rankingConfig.diversityThreshold,
     };
-    const candidateMetrics = validCandidates.map((candidate) => rawMetrics(candidate));
-    const ranges = metricRanges(candidateMetrics);
-    const ranked = validCandidates
-        .map((candidate, index): RankableCandidate | undefined => {
-            const metrics = candidateMetrics[index];
-            const normalized = normalizeMetrics(metrics, ranges);
-            const softScore = calculateSoftScore(normalized, normalizedConfig.weights);
-            return softScore === undefined
-                ? undefined
-                : {
-                      source: candidate,
-                      rawMetrics: metrics,
-                      normalizedMetrics: normalized,
-                      softScore,
-                  };
-        })
-        .filter((candidate): candidate is RankableCandidate => candidate !== undefined)
-        .sort((first, second) => {
-            const scoreDifference = first.softScore - second.softScore;
-            return Math.abs(scoreDifference) > SCORE_TIE_TOLERANCE
-                ? scoreDifference
-                : first.source.id - second.source.id;
-        });
+    const ranked = rankingResult.geometry.candidates;
 
     const targetCount = Math.min(normalizedConfig.resultCount, ranked.length);
-    const excludedBecauseDiagnosticsUnavailable = validCandidates.length - ranked.length;
-    let selected: RankableCandidate[] = [];
+    const excludedBecauseDiagnosticsUnavailable =
+        rankingResult.geometry.excludedBecauseDiagnosticsUnavailable;
+    let selected: SoftScoredMultiSupportCandidate<NearbyMultiSupportSearchCandidateSummary>[] = [];
     let usedThreshold = normalizedConfig.diversityThreshold;
     for (const threshold of buildSuggestedDiversityThresholdSequence(
         normalizedConfig.diversityThreshold,

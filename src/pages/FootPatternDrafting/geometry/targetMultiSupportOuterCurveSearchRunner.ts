@@ -19,6 +19,24 @@ export interface NearbyMultiSupportSearchRunnerOptions {
     yieldControl?: () => Promise<void>;
 }
 
+interface StreamableSearchEvaluation {
+    discoveredCandidate?: unknown;
+}
+
+export interface ChunkedSearchSession<Evaluation extends StreamableSearchEvaluation, Snapshot> {
+    hasPending: () => boolean;
+    evaluateNext: () => Evaluation | undefined;
+    getSnapshot: () => Snapshot;
+}
+
+export interface ChunkedSearchRunnerOptions<Evaluation, Snapshot> {
+    chunkSize?: number;
+    shouldCancel: () => boolean;
+    onValidCandidate?: (evaluation: Evaluation, snapshot: Snapshot) => void;
+    onProgress?: (snapshot: Snapshot) => void;
+    yieldControl?: () => Promise<void>;
+}
+
 function yieldToEventLoop(): Promise<void> {
     return new Promise((resolve) => {
         setTimeout(resolve, 0);
@@ -30,18 +48,21 @@ function yieldToEventLoop(): Promise<void> {
  * remains synchronous/pure with respect to its geometry inputs; this runner only
  * schedules progress and cancellation around it.
  */
-export async function runNearbyMultiSupportSearchSession(
-    session: NearbyMultiSupportSearchSession,
+export async function runChunkedSearchSession<
+    Evaluation extends StreamableSearchEvaluation,
+    Snapshot,
+>(
+    session: ChunkedSearchSession<Evaluation, Snapshot>,
     {
         chunkSize = DEFAULT_NEARBY_SEARCH_CHUNK_SIZE,
         shouldCancel,
         onValidCandidate,
         onProgress,
         yieldControl = yieldToEventLoop,
-    }: NearbyMultiSupportSearchRunnerOptions,
+    }: ChunkedSearchRunnerOptions<Evaluation, Snapshot>,
 ): Promise<NearbyMultiSupportSearchRunOutcome> {
     if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
-        throw new Error('Nearby search chunk size must be a positive integer.');
+        throw new Error('Search chunk size must be a positive integer.');
     }
 
     let firstValidYielded = false;
@@ -68,4 +89,14 @@ export async function runNearbyMultiSupportSearchSession(
 
     onProgress?.(session.getSnapshot());
     return shouldCancel() ? 'CANCELLED' : 'COMPLETED';
+}
+
+export function runNearbyMultiSupportSearchSession(
+    session: NearbyMultiSupportSearchSession,
+    options: NearbyMultiSupportSearchRunnerOptions,
+): Promise<NearbyMultiSupportSearchRunOutcome> {
+    return runChunkedSearchSession<
+        NearbyMultiSupportSearchEvaluation,
+        NearbyMultiSupportSearchResult
+    >(session, options);
 }
