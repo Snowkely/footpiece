@@ -1,0 +1,11 @@
+export const ROUTE_AUTO_GRADING = '/auto-grading';
+export const ROUTE_UPLOAD_PATTERN = '/upload-pattern';
+export const ROUTE_HOME = '/home';
+export const ROUTE_LOGIN = '/user/login';
+export const ROUTE_VIEW_PATTERN = '/view-pattern';
+export const ROUTE_PATTERN_MANAGEMENT = '/pattern-managment';
+export const ROUTE_FASHION_LOGIN = '/user/fashion-login';
+export const ROUTE_REGISTER = '/user/register';
+export const ROUTE_VERIFY_EMAIL = '/user/email/verify';
+export const ROUTE_RESET_PSW = '/user/password/reset';
+export const ROUTE_FORGOT_PSW = '/user/forgotpsw';

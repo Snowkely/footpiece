@@ -1,0 +1,74 @@
+{
+  "units": "mm",
+  "dxfVersion": "AC1021",
+  "centimetersToMillimeters": 10,
+  "layout": "back-above-front",
+  "gapMm": 30,
+  "marginMm": 10,
+  "front": {
+    "vertexCount": 408,
+    "localBoundsMm": {
+      "minX": -85.36543692809657,
+      "minY": -207.73797692842354,
+      "maxX": 85.36543692809657,
+      "maxY": 90,
+      "width": 170.73087385619314,
+      "height": 297.73797692842356
+    },
+    "masterBoundsMm": {
+      "minX": 10,
+      "minY": 10,
+      "maxX": 180.73087385619314,
+      "maxY": 307.73797692842356,
+      "width": 170.73087385619314,
+      "height": 297.73797692842356
+    },
+    "masterOffsetMm": {
+      "x": 95.36543692809657,
+      "y": 217.73797692842354
+    }
+  },
+  "back": {
+    "vertexCount": 12,
+    "localBoundsMm": {
+      "minX": -84,
+      "minY": -62.000000000000014,
+      "maxX": 84,
+      "maxY": 100,
+      "width": 168,
+      "height": 162
+    },
+    "masterBoundsMm": {
+      "minX": 10,
+      "minY": 337.73797692842356,
+      "maxX": 178,
+      "maxY": 499.73797692842356,
+      "width": 168,
+      "height": 162
+    },
+    "masterOffsetMm": {
+      "x": 94,
+      "y": 399.73797692842356
+    }
+  },
+  "masterBoundsMm": {
+    "minX": 10,
+    "minY": 10,
+    "maxX": 180.73087385619314,
+    "maxY": 499.73797692842356,
+    "width": 170.73087385619314,
+    "height": 489.73797692842356
+  },
+  "multiSupport": {
+    "pointCount": 401,
+    "expectedLengthCm": 44.02097170261078,
+    "expectedLengthMm": 440.2097170261078,
+    "masterLengthMm": 440.20971702610814,
+    "lengthErrorMm": 3.410605131648481e-13
+  },
+  "sourceParameters": {
+    "alpha": 0.5,
+    "thetaDeg": 9,
+    "lambdaCm": 2.6
+  }
+}
